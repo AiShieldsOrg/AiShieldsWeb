@@ -6,7 +6,7 @@ import uuid
 from sensitive_data_sanitizer import SensitiveDataSanitizer
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your_secret_key' #str(getS3cr3txLocalD('Tdr9azbcjb3SXdad0pHi7SyjPog6RRT1yFM7lCeyTz6dEQeEi0vfOo8mI4DM4Eh/ldrc7MlyTQ7ah+UrhXYSJ9dloEcsa6P1bMNfNTA6hKGrqZfozJLnb/W6dHLIMhhpn6dgON9jIFHJBSK4/g7AdkMc53q6r+pmjJn/epoIFDCj5iNkjPahFO+K3UtAMNJ0Ey64AM4eC7YgAUUasBmbfBxUqmCR3E1KB4Z3BNKLmX4YGB6A1qHTAs8q6OcXYuT01PcbMk64bHQ5aOkut5YxqOK9ljdqpvkmm4rTkc6sXxgx40rJJWDgBzbV7NSglndorqWXudSBvnTj25/UNfPXWF1kRdCnhqGs3zm8TAidXXebdKVEG3yx1w0JEqGeMbG+XNPkHQPJ7gej/Sxoi92fzIf5vCO9i1YoKFMMvZTnw7fEZPeHED7JkoogqTuaBid3Q8u/61HK0clNvQBNOjm9KT8P7vTwfHWzWRZp0zKgimYEKBeVRSp9vLIKMu1a8y2quD7qY7n0AYZuxwFyoHOL7bZq0Eru6lJofBizO5cEcn5EUyC1aS5+0fJwskBIRHz+2AzEVhLVkUAmLeoDmCYrdIFm05irJ8ajHoXM9SMrOJCnBL9RFsZm/9KHB1XrHN/cG/MQXomNWF68WJLigiy+cLbgNcnvLGuLn5brktIJ/MI=')).lstrip('b\'').rstrip('\'')
+app.config['SECRET_KEY'] = '' # Redacted
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///mydb.db'
 db = SQLAlchemy(app)
 
