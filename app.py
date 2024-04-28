@@ -6,10 +6,14 @@ import uuid
 from sensitive_data_sanitizer import SensitiveDataSanitizer
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = str(getS3cr3txLocalD('Tdr9azbcjb3SXdad0pHi7SyjPog6RRT1yFM7lCeyTz6dEQeEi0vfOo8mI4DM4Eh/ldrc7MlyTQ7ah+UrhXYSJ9dloEcsa6P1bMNfNTA6hKGrqZfozJLnb/W6dHLIMhhpn6dgON9jIFHJBSK4/g7AdkMc53q6r+pmjJn/epoIFDCj5iNkjPahFO+K3UtAMNJ0Ey64AM4eC7YgAUUasBmbfBxUqmCR3E1KB4Z3BNKLmX4YGB6A1qHTAs8q6OcXYuT01PcbMk64bHQ5aOkut5YxqOK9ljdqpvkmm4rTkc6sXxgx40rJJWDgBzbV7NSglndorqWXudSBvnTj25/UNfPXWF1kRdCnhqGs3zm8TAidXXebdKVEG3yx1w0JEqGeMbG+XNPkHQPJ7gej/Sxoi92fzIf5vCO9i1YoKFMMvZTnw7fEZPeHED7JkoogqTuaBid3Q8u/61HK0clNvQBNOjm9KT8P7vTwfHWzWRZp0zKgimYEKBeVRSp9vLIKMu1a8y2quD7qY7n0AYZuxwFyoHOL7bZq0Eru6lJofBizO5cEcn5EUyC1aS5+0fJwskBIRHz+2AzEVhLVkUAmLeoDmCYrdIFm05irJ8ajHoXM9SMrOJCnBL9RFsZm/9KHB1XrHN/cG/MQXomNWF68WJLigiy+cLbgNcnvLGuLn5brktIJ/MI=')).lstrip('b\'').rstrip('\'')
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///self_protect_demo.db'
+app.config['SECRET_KEY'] = 'your_secret_key' #str(getS3cr3txLocalD('Tdr9azbcjb3SXdad0pHi7SyjPog6RRT1yFM7lCeyTz6dEQeEi0vfOo8mI4DM4Eh/ldrc7MlyTQ7ah+UrhXYSJ9dloEcsa6P1bMNfNTA6hKGrqZfozJLnb/W6dHLIMhhpn6dgON9jIFHJBSK4/g7AdkMc53q6r+pmjJn/epoIFDCj5iNkjPahFO+K3UtAMNJ0Ey64AM4eC7YgAUUasBmbfBxUqmCR3E1KB4Z3BNKLmX4YGB6A1qHTAs8q6OcXYuT01PcbMk64bHQ5aOkut5YxqOK9ljdqpvkmm4rTkc6sXxgx40rJJWDgBzbV7NSglndorqWXudSBvnTj25/UNfPXWF1kRdCnhqGs3zm8TAidXXebdKVEG3yx1w0JEqGeMbG+XNPkHQPJ7gej/Sxoi92fzIf5vCO9i1YoKFMMvZTnw7fEZPeHED7JkoogqTuaBid3Q8u/61HK0clNvQBNOjm9KT8P7vTwfHWzWRZp0zKgimYEKBeVRSp9vLIKMu1a8y2quD7qY7n0AYZuxwFyoHOL7bZq0Eru6lJofBizO5cEcn5EUyC1aS5+0fJwskBIRHz+2AzEVhLVkUAmLeoDmCYrdIFm05irJ8ajHoXM9SMrOJCnBL9RFsZm/9KHB1XrHN/cG/MQXomNWF68WJLigiy+cLbgNcnvLGuLn5brktIJ/MI=')).lstrip('b\'').rstrip('\'')
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///mydb.db'
 db = SQLAlchemy(app)
 
+def app_context():
+    app = Flask(__name__)
+    with app.app_context():
+        yield
 
 
 class User(db.Model):
@@ -23,7 +27,7 @@ class InputPrompt(db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     api = db.Column(db.String(512),unique=False,nullable=False)
     internalPromptID = db.Column(db.String(64),unique=True,nullable=False)
-    inputPrompt = db.Column(db.String(max),unique=False,nullable=False)
+    inputPrompt = db.Column(db.Text,unique=False,nullable=False)
     
 class PreProcInputPrompt(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -31,11 +35,11 @@ class PreProcInputPrompt(db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     api = db.Column(db.String(512),unique=False,nullable=False)
-    rawInputPrompt = db.Column(db.String(max),unique=False,nullable=False)
-    preProcInputPrompt = db.Column(db.String(max),unique=False,nullable=False)
-    SensitiveDataSanitizerReport = db.Column(db.String(max),unique=False,nullable=True)
-    PromptInjectionReport = db.Column(db.String(max),unique=False,nullable=True)    
-    OverrelianceReport = db.Column(db.String(max),unique=False,nullable=True)
+    rawInputPrompt = db.Column(db.Text,unique=False,nullable=False)
+    preProcInputPrompt = db.Column(db.Text,unique=False,nullable=False)
+    SensitiveDataSanitizerReport = db.Column(db.Text,unique=False,nullable=True)
+    PromptInjectionReport = db.Column(db.Text,unique=False,nullable=True)    
+    OverrelianceReport = db.Column(db.Text,unique=False,nullable=True)
    
  
 class OutputResponse(db.Model):
@@ -45,7 +49,7 @@ class OutputResponse(db.Model):
     internalPromptID = db.Column(db.String(64),unique=True,nullable=False)
     externalPromptID = db.Column(db.String(256),unique=True,nullable=False)
     api = db.Column(db.String(512),unique=False,nullable=False) 
-    rawoutput = db.Column(db.String(max),unique=False,nullable=False)
+    rawoutput = db.Column(db.Text,unique=False,nullable=False)
       
 class PostProcOutputResponse(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -54,8 +58,8 @@ class PostProcOutputResponse(db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     api = db.Column(db.String(512),unique=False,nullable=False)
-    rawOutputPrompt = db.Column(db.String(max),unique=False,nullable=False)
-    postProcOutputPrompt = db.Column(db.String(max),unique=False,nullable=False)    
+    rawOutputPrompt = db.Column(db.Text,unique=False,nullable=False)
+    postProcOutputPrompt = db.Column(db.Text,unique=False,nullable=False)    
 
 class OutputReport(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -64,10 +68,10 @@ class OutputReport(db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     api = db.Column(db.String(512),unique=False,nullable=False)
-    SensitiveDataSanitizerReport = db.Column(db.String(max),unique=False,nullable=False)
-    PromptInjectionReport = db.Column(db.String(max),unique=False,nullable=False)    
-    OverrelianceReport = db.Column(db.String(max),unique=False,nullable=False)
-    InsecureOutputReportHandling = db.Column(db.String(max),unique=False,nullable=False)     
+    SensitiveDataSanitizerReport = db.Column(db.Text,unique=False,nullable=False)
+    PromptInjectionReport = db.Column(db.Text,unique=False,nullable=False)    
+    OverrelianceReport = db.Column(db.Text,unique=False,nullable=False)
+    InsecureOutputReportHandling = db.Column(db.Text,unique=False,nullable=False)     
     
 @app.before_request
 def before_request():
