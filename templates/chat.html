@@ -4,6 +4,7 @@
     <title>AiShields Chat</title>
 </head>
 <body>
+    <br/><br/>
     <center><img src='http://127.0.0.1:5000/static/aishields.jpg' alt='AiShields' style='height:200px;width:200px'/><br/><br/>
     <h1>GenAI Chat</h1>
     {% with messages = get_flashed_messages() %}
@@ -64,14 +65,31 @@
             </select></td>
                 </tr><tr><td>
         
-        &nbsp;</td></tr><td>
+        Store Token?:</td><td>
+            <select id="selectstore" name="storetoken">
+                <option value="No" selected>No</option>
+                <option value="Yes">Yes</option>
+            </select>
+        </td></tr><td style="vertical-align:bottom">
         <label for="apitoken">Api Token:</label></td><td>
         <input type="text" name="apitoken" required></tr><tr><td>
-        <label for="inputprompt">Prompt:</label></td><td>
-        <input type="text" name="inputprompt" multiline required></tr><tr><td>&nbsp;<td>
-        <input type="submit" value="Chat"></td>
+            <label for="inputprompt">Prompt:</label></td><td>
+            <textarea id="inputprompt" name="inputprompt" rows="4" cols="50" required>
+                Enter your prompt here
+            </textarea></td>
+        </tr><tr><td>&nbsp;</td><td style="align:center">
+        <input id="btnChat" type="submit" value="Chat" style="align:center;border:3px;color:navy;bordercolor:navy;font-face:verdana;font-weight:bolder"></td>
     </tr>
     {% if output %}
+<tr><td>
+        <label for="response">Response:</label></td><td>
+        <textarea id="response" name="response" rows="4" cols="50" required>
+            &nbsp;
+        </textarea></td>
+    </tr><tr><td>&nbsp;</td><td style="align:center">
+    <input id="btnReGen" type="submit" value="ReGenerate" style="align:center;border:3px;color:navy;bordercolor:navy;font-face:verdana;font-weight:bolder"></td>
+</tr>
+    
     <tr>    
         <td>
 
@@ -81,6 +99,8 @@
             </table></center>
     </form>
     <!-- Display the list of users -->
+    {% if output %}
+    
     <center><h2>AiShields Report</h2>
     <table border="1">
         <tr>
@@ -96,5 +116,6 @@
         </tr>
         {% endfor %}
     </table></center>
+    {% endif %}
 </body>
 </html>
