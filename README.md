@@ -17,14 +17,14 @@ Dependencies: Python 3.12.3, Sqlite3 and dotnet version 8 or higher. Please inst
         3. python3.12 -m venv .venv
         4. source /Users/pmk/Documents/AiShieldsWeb/.venv/bin/activate
         5. pip3.12 install -r requirements.txt
-3. Certificate for Dev Encryption Setup
+2. Certificate for Dev Encryption Setup
     a) Download the file located in our discord server: https://discordapp.com/channels/1229942715450523658/1229998804099403777/1234622867199758366
     Download and copy the file:
 Patrick-5e39e57f-0550-49f3-8db6-d33cd139168f.pem
 to helpers/Patrick-5e39e57f-0550-49f3-8db6-d33cd139168f.pem
 (file from Discord Server App # desktop-web-frontend)
 
-4. Set the database password in your local copy 
+3. Set the database password in your local copy 
 On or around line 6 of app.py 
 app.config['SECRET_KEY'] = 
 
