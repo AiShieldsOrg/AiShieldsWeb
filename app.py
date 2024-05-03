@@ -10,7 +10,7 @@ import uuid
 from sensitive_data_sanitizer import SensitiveDataSanitizer
 from self_protection import getS3cr3txLocalE,getS3cr3txLocalD 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = '' #str(getS3cr3txLocalD('Tdr9azbcjb3SXdad0pHi7SyjPog6RRT1yFM7lCeyTz6dEQeEi0vfOo8mI4DM4Eh/ldrc7MlyTQ7ah+UrhXYSJ9dloEcsa6P1bMNfNTA6hKGrqZfozJLnb/W6dHLIMhhpn6dgON9jIFHJBSK4/g7AdkMc53q6r+pmjJn/epoIFDCj5iNkjPahFO+K3UtAMNJ0Ey64AM4eC7YgAUUasBmbfBxUqmCR3E1KB4Z3BNKLmX4YGB6A1qHTAs8q6OcXYuT01PcbMk64bHQ5aOkut5YxqOK9ljdqpvkmm4rTkc6sXxgx40rJJWDgBzbV7NSglndorqWXudSBvnTj25/UNfPXWF1kRdCnhqGs3zm8TAidXXebdKVEG3yx1w0JEqGeMbG+XNPkHQPJ7gej/Sxoi92fzIf5vCO9i1YoKFMMvZTnw7fEZPeHED7JkoogqTuaBid3Q8u/61HK0clNvQBNOjm9KT8P7vTwfHWzWRZp0zKgimYEKBeVRSp9vLIKMu1a8y2quD7qY7n0AYZuxwFyoHOL7bZq0Eru6lJofBizO5cEcn5EUyC1aS5+0fJwskBIRHz+2AzEVhLVkUAmLeoDmCYrdIFm05irJ8ajHoXM9SMrOJCnBL9RFsZm/9KHB1XrHN/cG/MQXomNWF68WJLigiy+cLbgNcnvLGuLn5brktIJ/MI=')).lstrip('b\'').rstrip('\'')
+app.config['SECRET_KEY'] = 'your_secret_key' #str(getS3cr3txLocalD('Tdr9azbcjb3SXdad0pHi7SyjPog6RRT1yFM7lCeyTz6dEQeEi0vfOo8mI4DM4Eh/ldrc7MlyTQ7ah+UrhXYSJ9dloEcsa6P1bMNfNTA6hKGrqZfozJLnb/W6dHLIMhhpn6dgON9jIFHJBSK4/g7AdkMc53q6r+pmjJn/epoIFDCj5iNkjPahFO+K3UtAMNJ0Ey64AM4eC7YgAUUasBmbfBxUqmCR3E1KB4Z3BNKLmX4YGB6A1qHTAs8q6OcXYuT01PcbMk64bHQ5aOkut5YxqOK9ljdqpvkmm4rTkc6sXxgx40rJJWDgBzbV7NSglndorqWXudSBvnTj25/UNfPXWF1kRdCnhqGs3zm8TAidXXebdKVEG3yx1w0JEqGeMbG+XNPkHQPJ7gej/Sxoi92fzIf5vCO9i1YoKFMMvZTnw7fEZPeHED7JkoogqTuaBid3Q8u/61HK0clNvQBNOjm9KT8P7vTwfHWzWRZp0zKgimYEKBeVRSp9vLIKMu1a8y2quD7qY7n0AYZuxwFyoHOL7bZq0Eru6lJofBizO5cEcn5EUyC1aS5+0fJwskBIRHz+2AzEVhLVkUAmLeoDmCYrdIFm05irJ8ajHoXM9SMrOJCnBL9RFsZm/9KHB1XrHN/cG/MQXomNWF68WJLigiy+cLbgNcnvLGuLn5brktIJ/MI=')).lstrip('b\'').rstrip('\'')
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///aishieldsDBsql3'
 db = SQLAlchemy(app)
 
@@ -259,7 +259,7 @@ def chat():
             flash("Please enter an api token for the api you select")
             return render_template('chat.html',apis=apis, username=username,email=email)
         #securely store cred:
-        strEncToken = getS3cr3txLocalE(token)
+        strEncToken = token
         token = ""
         username = ""
         if request.form['username'] is not None:
@@ -308,8 +308,8 @@ def chat():
         db.session.add(rawInput)
         db.session.commit()
         preprocessedPrompt = aishields_sanitize_input(rawInput)
-        strTempApiKey = str(getS3cr3txLocalD(str(strEncToken).lstrip('b\'').rstrip('\''))).lstrip('b\'').rstrip('\'')
-        client = openai.Client(api_key=str(getS3cr3txLocalD(str(strEncToken).lstrip('b\'').rstrip('\''))).lstrip('b\'').rstrip('\''))
+        strTempApiKey = strEncToken
+        client = openai.Client(api_key=str(strEncToken))
         stream = client.chat.completions.create(
             model=strModel,
             messages=[{"role": "user", "content": preprocessedPrompt}],
@@ -332,7 +332,8 @@ def chat():
     # Fetch the list of users from the database
         # prepare report
         
-    return render_template('chat.html',apis=apis)
+    return render_template('chat.html',apis=apis,output=strRawOutput,response=strRawOutput)
+
 def aishields_sanitize_input(input:InputPrompt):
     #sensitive data sanitization:
     # now sanitize for privacy protected data
@@ -340,14 +341,16 @@ def aishields_sanitize_input(input:InputPrompt):
     strRawInputPrompt = input.inputPrompt
     sds = SensitiveDataSanitizer()
     strSensitiveDataSanitized = sds.sanitize_input(input_content=strRawInputPrompt)           
-    strPreProcInput += strSensitiveDataSanitized
+    #
+    strPreProcInput += strRawInputPrompt
     #now sanitize for Prompt Injection
     #now assess for Overreliance
     return strPreProcInput
     
-def aishields_postprocess_output(input:ApiResponse):
+def aishields_postprocess_output(input):
     #insecure output handing
-    strPostProcessedOutput = ""
+    
+    strPostProcessedOutput = input
     #handle and sanitize raw output
     #return post processed Output
     return strPostProcessedOutput
