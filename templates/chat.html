@@ -84,7 +84,7 @@
 <tr><td>
         <label for="response">Response:</label></td><td>
         <textarea id="response" name="response" rows="4" cols="50" required>
-            &nbsp;
+            {{response}}
         </textarea></td>
     </tr><tr><td>&nbsp;</td><td style="align:center">
     <input id="btnReGen" type="submit" value="ReGenerate" style="align:center;border:3px;color:navy;bordercolor:navy;font-face:verdana;font-weight:bolder"></td>
@@ -93,7 +93,7 @@
     <tr>    
         <td>
 
-        <label for="cleanoutput">Response:</label></td><td>
+        <label for="cleanoutput">Clean Response:</label></td><td>
         {{output.clean}}</td></tr>
         {% endif %}
             </table></center>
