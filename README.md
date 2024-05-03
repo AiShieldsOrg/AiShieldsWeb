@@ -4,7 +4,7 @@ BCAMP.dev Data and AI Cohort Spring 2024
 Project: Data Sanitizer for AI
 AiShields Web Front End:
 
-Dependencies: Python 3.12.3, Sqlite3 and dotnet version 8 or higher. Please install dotnet version 8 or higher: it is a dependency for some helper functions of our flask app, dotnet installation overview is here https://learn.microsoft.com/en-us/dotnet/core/install/ 
+Dependencies: Python 3.12.3, Sqlite3 
 
 1. a)Unix/Linux/Mac: 
         mkdir aiShieldsLocal
