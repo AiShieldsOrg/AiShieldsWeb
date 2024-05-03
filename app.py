@@ -259,7 +259,7 @@ def chat():
             flash("Please enter an api token for the api you select")
             return render_template('chat.html',apis=apis, username=username,email=email)
         #securely store cred:
-        strEncToken = getS3cr3txLocalE(token)
+        strEncToken = token
         token = ""
         username = ""
         if request.form['username'] is not None:
@@ -308,8 +308,8 @@ def chat():
         db.session.add(rawInput)
         db.session.commit()
         preprocessedPrompt = aishields_sanitize_input(rawInput)
-        strTempApiKey = str(getS3cr3txLocalD(str(strEncToken).lstrip('b\'').rstrip('\''))).lstrip('b\'').rstrip('\'')
-        client = openai.Client(api_key=str(getS3cr3txLocalD(str(strEncToken).lstrip('b\'').rstrip('\''))).lstrip('b\'').rstrip('\''))
+        strTempApiKey = strEncToken
+        client = openai.Client(api_key=str(strEncToken))
         stream = client.chat.completions.create(
             model=strModel,
             messages=[{"role": "user", "content": preprocessedPrompt}],
@@ -332,7 +332,8 @@ def chat():
     # Fetch the list of users from the database
         # prepare report
         
-    return render_template('chat.html',apis=apis)
+    return render_template('chat.html',apis=apis,output=strRawOutput,response=strRawOutput)
+
 def aishields_sanitize_input(input:InputPrompt):
     #sensitive data sanitization:
     # now sanitize for privacy protected data
@@ -340,14 +341,16 @@ def aishields_sanitize_input(input:InputPrompt):
     strRawInputPrompt = input.inputPrompt
     sds = SensitiveDataSanitizer()
     strSensitiveDataSanitized = sds.sanitize_input(input_content=strRawInputPrompt)           
-    strPreProcInput += strSensitiveDataSanitized
+    #
+    strPreProcInput += strRawInputPrompt
     #now sanitize for Prompt Injection
     #now assess for Overreliance
     return strPreProcInput
     
-def aishields_postprocess_output(input:ApiResponse):
+def aishields_postprocess_output(input):
     #insecure output handing
-    strPostProcessedOutput = ""
+    
+    strPostProcessedOutput = input
     #handle and sanitize raw output
     #return post processed Output
     return strPostProcessedOutput

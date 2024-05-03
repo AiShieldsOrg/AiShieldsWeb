@@ -136,7 +136,7 @@ def sanitize_input(input_string):
 
 def getS3cr3txLocalD(strInput):
     try:
-        strInput = str(strInput)
+        strInput = str(strInput).rstrip('\\n')
         stdout = Popen('dotnet'+' \"'+ strs3cr3txDLL + '\"'+' d '+' \"'+ strPEMfileName + '\"'+' \"' + strInput+'\"', shell=True, stdout=PIPE).stdout
         s3cr3tx =str(stdout.readline())
         return str(s3cr3tx)
