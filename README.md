@@ -36,6 +36,6 @@ UNIX/MacOS/Linux
 run the run_flask_app.sh
 Windows:
 $env:FLASK_APP = "app.py"
-flask run --host=0.0.0.0 --port=8080
+flask run --host=0.0.0.0 --port=5000
 
 
