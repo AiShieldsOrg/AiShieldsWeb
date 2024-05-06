@@ -6,12 +6,15 @@ import requests
 import os
 import email
 import bleach
+import hashlib
 import uuid
+import rsa
+import base64
 from subprocess import Popen, PIPE
 
 app = Flask(__name__)
 strs3cr3txDLL = './helpers/s3cr3tx.dll'
-strPEMfileName = './helpers/Patrick-5e39e57f-0550-49f3-8db6-d33cd139168f.pem'
+strPEMfileName = ''
         
 # to_email = "recipient@example.com"
 # from_email = "your_email@example.com"
@@ -33,35 +36,38 @@ strPEMfileName = './helpers/Patrick-5e39e57f-0550-49f3-8db6-d33cd139168f.pem'
 
 def protect(request):
     # Input validation and sanitation example
-    if request.method == 'POST':
-        strIP = request.remote_addr
-        origusername = request.form.get('username')
-        origemail = request.form.get('email')
-        if not origusername or not origemail:
-                logging.warning('Invalid input: Empty username or email')
-                flash('Both username and email are required.', 'error')
-                return False
-        bleach_sanitized_username = sanitize_input(origusername)
-        bleach_sanitized_email = sanitize_input(origemail)
-        # check for full script elements
-        username = str(str(escape(bleach_sanitized_username)).lower().replace("<script>","")).replace("</script>","")
-        email = str(str(escape(bleach_sanitized_email)).lower().replace("<script>","")).replace("</script>","")
-        # check for partial script elements
-        username = str(username).replace('</','').replace('<','').replace('/>','').replace('>','').replace('(','').replace(')','')
-        email = str(email).replace('</','').replace('<','').replace('/>','').replace('>','').replace('(','').replace(')','')
+    try:
+        if request.method == 'POST':
+            strIP = request.remote_addr
         
-        if str(origusername).lower() != username or str(origemail).lower() != email:
-            logging.warning('Attack detected: Injection Attack from ' + str(strIP))
-            # email.send_secure_email(
-            #     to_email, from_email, smtp_server, smtp_port, smtp_user, smtp_password, subject, message_body
-            # )   
-            flash('Something went wrong. Please try again.', 'error')
-            return False
+            if request.form["email"] is not None:
+                #origusername = request.form['username']
+                origemail = request.form['email']
+                #bleach_sanitized_username = sanitize_input(origusername)
+                bleach_sanitized_email = sanitize_input(origemail)
+            # check for full script elements
+                #username = str(str(escape(bleach_sanitized_username)).lower().replace("<script>","")).replace("</script>","")
+                email = str(str(escape(bleach_sanitized_email)).lower().replace("<script>","")).replace("</script>","")
+                # check for partial script elements
+                #username = str(username).replace('</','').replace('<','').replace('/>','').replace('>','').replace('(','').replace(')','')
+                email = str(email).replace('</','').replace('<','').replace('/>','').replace('>','').replace('(','').replace(')','')
+                
+                if str(origemail).lower() != email:
+                    logging.warning('Attack detected: Injection Attack from ' + str(strIP))
+                    # email.send_secure_email(
+                #     to_email, from_email, smtp_server, smtp_port, smtp_user, smtp_password, subject, message_body
+                # )   
+                    flash('Something went wrong. Please try again.', 'error')
+                    return False
+                else:
+                    return True
+            else:
+                return True
         else:
             return True
-    else:
-        return True
-import subprocess
+    except Exception as err:
+        print('An error occured: ' + str(err))  
+
 
 # Example usage:
 # store_pem_certificate("/path/to/your/certificate.pem")
@@ -134,23 +140,23 @@ def sanitize_input(input_string):
 
     return sanitized_string
 
-def getS3cr3txLocalD(strInput):
-    try:
-        strInput = str(strInput).rstrip('\\n')
-        stdout = Popen('dotnet'+' \"'+ strs3cr3txDLL + '\"'+' d '+' \"'+ strPEMfileName + '\"'+' \"' + strInput+'\"', shell=True, stdout=PIPE).stdout
-        s3cr3tx =str(stdout.readline())
-        return str(s3cr3tx)
-    except Exception as err:
-        print('An error occured: ' + str(err))  
+# def getS3cr3txLocalD(strInput):
+#     try:
+#         strInput = str(strInput)
+#         stdout = Popen('dotnet'+' \"'+ strs3cr3txDLL + '\"'+' d '+' \"'+ strPEMfileName + '\"'+' \"' + strInput+'\"', shell=True, stdout=PIPE).stdout
+#         s3cr3tx =str(stdout.readline()).lstrip('b\'').rstrip('\'')
+#         return str(s3cr3tx)
+#     except Exception as err:
+#         print('An error occured: ' + str(err))  
 
-def getS3cr3txLocalE(strInput):
-    try:
-        strInput = str(strInput)
-        stdout= Popen('dotnet'+' \"'+ strs3cr3txDLL + '\"'+' e '+'\"'+ strPEMfileName + '\"'+' \"' + strInput+'\"', shell=True, stdout=PIPE).stdout
-        s3cr3tx=str(stdout.readline())
-        return s3cr3tx
-    except Exception as err:
-        print('An error occured: ' + str(err)) 
+# def getS3cr3txLocalE(strInput):
+#     try:
+#         strInput = str(strInput)
+#         stdout= Popen('dotnet'+' \"'+ strs3cr3txDLL + '\"'+' e '+'\"'+ strPEMfileName + '\"'+' \"' + strInput+'\"', shell=True, stdout=PIPE).stdout
+#         s3cr3tx=str(stdout.readline()).lstrip('b\'').rstrip('\\n\'')
+#         return s3cr3tx
+#     except Exception as err:
+#         print('An error occured: ' + str(err)) 
 
 def getS3cr3tx(strInput):
     try:
@@ -168,12 +174,67 @@ def getS3cr3tx(strInput):
         s3cr3tx=result3.text
         return s3cr3tx
     except Exception as err:
+        print('An error occured: ' + str(err)) 
+def getHash(strInput):
+    try:
+        strInput = str(strInput)
+        #please set the following environment variables with the appropriate values s3cr3tx_Email, s3cr3tx_APIToken, s3cr3tx_AuthCode, s3cr3tx_URL for your s3cr3tx API account
+        strOutput = ""
+        hashedInput = hashlib.sha3_512(strInput.encode('utf-8'))
+        strOutput = hashedInput.hexdigest()
+        return strOutput
+    except Exception as err:
         print('An error occured: ' + str(err))         
-        # user = User.query.filter_by(username=username).first()
-        # if user:
-        #     logging.warning('Invalid input: Duplicate username')
-        #     flash('Username already exists.', 'error')
-        #     return redirect(url_for('add_user'))
 
-# if __name__ == '__main__':
-#     app.run(debug=True)
+def compareHash(strInput,strInput2):
+    try:
+        strInput = str(strInput)
+        #please set the following environment variables with the appropriate values s3cr3tx_Email, s3cr3tx_APIToken, s3cr3tx_AuthCode, s3cr3tx_URL for your s3cr3tx API account
+        strOutput = ""
+        hashedInput = hashlib.sha3_512(strInput)
+        strOutput = hashedInput.hexdigest()
+        strInput2 = str(strInput2)
+        #please set the following environment variables with the appropriate values s3cr3tx_Email, s3cr3tx_APIToken, s3cr3tx_AuthCode, s3cr3tx_URL for your s3cr3tx API account
+        strOutput2 = ""
+        hashedInput2 = hashlib.sha3_512(strInput)
+        strOutput2 = hashedInput2.hexdigest()
+        if strOutput ==  strOutput2:
+            return True
+        else:
+            return False
+    except Exception as err:
+        print('An error occured: ' + str(err))   
+        
+def enc(strInput):
+    with open(strPEMfileName, mode='rb') as privatefile:
+        keydata = privatefile.read()
+    privkey = rsa.PrivateKey.load_pkcs1(keydata)
+    encbytes = rsa.encrypt(str(strInput).encode("utf-8",'ignore'),privkey) 
+    strOutput = base64.urlsafe_b64encode(encbytes).decode("utf-8")
+    return strOutput 
+
+def dec(strInput):
+    with open(strPEMfileName, mode='rb') as privatefile:
+        keydata = privatefile.read()
+    privkey = rsa.PrivateKey.load_pkcs1(keydata)
+    inputdecoded = base64.urlsafe_b64decode(strInput)
+    decbytes = rsa.decrypt(inputdecoded,privkey)
+    strOutput = decbytes.decode("utf-8",'ignore')
+    return strOutput
+
+def encStandard(strInput):
+    with open(strPEMfileName, mode='rb') as privatefile:
+        keydata = privatefile.read()
+    privkey = rsa.PrivateKey.load_pkcs1(keydata)
+    encbytes = rsa.encrypt(str(strInput).encode("utf-8",'ignore'),privkey) 
+    strOutput = base64.standard_b64encode(encbytes).decode("utf-8")
+    return strOutput 
+
+def decStandard(strInput):
+    with open(strPEMfileName, mode='rb') as privatefile:
+        keydata = privatefile.read()
+    privkey = rsa.PrivateKey.load_pkcs1(keydata)
+    inputdecoded = base64.standard_b64decode(strInput)
+    decbytes = rsa.decrypt(inputdecoded,privkey)
+    strOutput = decbytes.decode("utf-8",'ignore')
+    return strOutput
