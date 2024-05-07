@@ -281,16 +281,7 @@ def index():
 def newaccount():
     try:
         if request.method == 'GET':
-            email = (
-                db.session.query(User)
-                .filter(User.email == str(request.form["email"]).lower(),User.user_verified == 1)
-                .one_or_none()
-            )
-            if email is not None:
-                flash("Email is already registered, please login")
-                return render_template('login.html',email=email.email)
-            else:
-                return render_template('newaccount.html',apis=apis, email=request.form["email"])
+            return render_template('newaccount.html')
         if request.method == 'POST':
             email = (
                 db.session.query(User)
