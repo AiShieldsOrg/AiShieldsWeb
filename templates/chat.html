@@ -24,10 +24,10 @@
             <table>
                 <tr><td>
                     <label for="username">Name:</label></td><td>
-                    <input type="text" name="username" required value="{{username}}"></td></tr><tr><td>
+                    <input type="text" name="username" required value="{{username}}"/></td></tr><tr><td>
               <tr><td>
                     <label for="email">Email:</label></td><td>
-        <input type="email" name="email" required value="{{email}}"></td></tr><tr><td>
+        <input type="email" name="email" required value="{{email}}"/></td></tr><tr><td>
         <label for="api">API:</label></td><td>
             <select id="selectvalue" name="api">
                 {% for n in apis: %}
@@ -35,25 +35,25 @@
                     <optgroup label="{{n["APIowner"]}}">
                          {%for m in n["TextGen"]["Models"]:%}
                             {% if m["Name"] == "GPT 4":%}
-                    <option value="{{n["APIowner"] + "-" + n["TextGen"]["Name"] + "-" + m["Name"]}}" selected >{{ n["APIowner"] + ' ' + n["TextGen"]["Name"] + ' ' + m["Name"]}}</option>
+                    <option value="{{n["APIowner"]}} {{m["details"]["jsonv"]}}" selected >{{ n["APIowner"] + ' ' + n["TextGen"]["Name"] + ' ' + m["Name"]}}</option>
                             {% else: %}
-                            <option value="{{n["APIowner"] + "-" + n["TextGen"]["Name"] + "-" + m["Name"]}}" >{{ n["APIowner"] + ' ' + n["TextGen"]["Name"] + ' ' + m["Name"] }}</option>
+                            <option value="{{n["APIowner"]}} {{m["details"]["jsonv"]}}" >{{ n["APIowner"] + ' ' + n["TextGen"]["Name"] + ' ' + m["Name"] }}</option>
                     
                             {% endif %} 
                         {% endfor %}
                     {% elif n["APIowner"] == "Anthropic": %}
                     </optgroup><optgroup label="Anthropic">
                         {% for o in n["TextGen"]["Models"]: %}
-                    <option value="{{n["APIowner"] + "-" + n["TextGen"]["Name"] + "-" + o["Name"]}}">{{ n["APIowner"] + ' ' + n["TextGen"]["Name"] + ' ' + o["Name"] }}</option>
+                    <option value="{{n["APIowner"]}} {{o["details"]["jsonv"]}}">{{ n["APIowner"] + ' ' + n["TextGen"]["Name"] + ' ' + o["Name"] }}</option>
                         {% endfor %}
                     {% else: %}
-                        {% if not n["TextGen"] or n["TextGen"]["Models"]:%}
+                        {% if not o["TextGen"] or n["TextGen"]["Models"]:%}
                     </optgroup>
                         {% else:%}
-                        </optgroup><optgroup label="{{n}}">
+                        </optgroup><optgroup label="{{n["APIowner"]}}">
                             {% for p in n["TextGen"]["Models"]: %}
                                  {% if p:%}
-                                    <option value="{{n[APIowner] + "-" + n["TextGen"]["Name"] + "-" + p["Name"]}}">{{ n[APIowner] + ' ' + n["TextGen"]["Name"] + ' ' + p["Name"] }}</option>
+                                    <option value="{{n["APIowner"]}} {{p["details"]["jsonv"]}}">{{ n[APIowner] + ' ' + n["TextGen"]["Name"] + ' ' + p["Name"] }}</option>
                                  {% endif %}
                                  {% endfor %}
                                  
@@ -63,7 +63,18 @@
                 {% endfor %}
                     
             </select></td>
-                </tr><tr><td>
+                </tr>
+                <tr><td>
+            <label for="role">Role:</label></td><td>
+                        <select id="selectstore" name="role">
+                            <option value='system'>System</option>
+                            <option value='user' selected>User</option>
+                            <option value='assistant'>Assistant</option>
+                            <option value='function'>Fuction</option>
+                            <option value='tool'>Tool</option>
+                            <!--'system', 'assistant', 'user', 'function', and 'tool'-->
+                        </select>
+                    </td></tr><tr><td>
         
         Store Token?:</td><td>
             <select id="selectstore" name="storetoken">
@@ -75,30 +86,25 @@
         <input type="text" name="apitoken" required></tr><tr><td>
             <label for="inputprompt">Prompt:</label></td><td>
             <textarea id="inputprompt" name="inputprompt" rows="4" cols="50" required>
-                Enter your prompt here
+                &nbsp;
             </textarea></td>
         </tr><tr><td>&nbsp;</td><td style="align:center">
-        <input id="btnChat" type="submit" value="Chat" style="align:center;border:3px;color:navy;bordercolor:navy;font-face:verdana;font-weight:bolder"></td>
+            <input type='hidden' name='csrf_token' value="{{ csrf_token }}" />
+            <input id="btnChat" type="submit" value="Chat" style="align:center;border:3px;color:navy;bordercolor:navy;font-face:verdana;font-weight:bolder"></td>
     </tr>
     {% if output %}
 <tr><td>
-        <label for="response">Response:</label></td><td>
+        <label for="response">Sanitized Response:</label></td><td>
         <textarea id="response" name="response" rows="4" cols="50" required>
-            {{response}}
+           &nbsp; {{response}}
         </textarea></td>
-    </tr><tr><td>&nbsp;</td><td style="align:center">
-    <input id="btnReGen" type="submit" value="ReGenerate" style="align:center;border:3px;color:navy;bordercolor:navy;font-face:verdana;font-weight:bolder"></td>
-</tr>
-    
-    <tr>    
-        <td>
-
-        <label for="cleanoutput">Clean Response:</label></td><td>
-        {{output.clean}}</td></tr>
-        {% endif %}
-            </table></center>
+    </tr><!--<tr><td>&nbsp;</td><td style="align:center">-->
+    <!--<input id="btnReGen" type="submit" value="ReGenerate" style="align:center;border:3px;color:navy;bordercolor:navy;font-face:verdana;font-weight:bolder"></td>
+</tr>-->
+    {% endif %}           
+</table></center>
     </form>
-    <!-- Display the list of users -->
+    <!-- Display the Report -->
     {% if output %}
     
     <center><h2>AiShields Report</h2>

@@ -1,22 +1,49 @@
 from flask import Flask, request, abort,render_template, redirect, url_for, flash
+from flask_wtf import CSRFProtect
+import bleach
+from markupsafe import escape
+from dateutil.relativedelta import relativedelta
 import datetime
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import DateTime,Column, ForeignKey, BigInteger,NVARCHAR,Integer, Table
+from sqlalchemy import DateTime,Column, ForeignKey, BigInteger,NVARCHAR,Integer, Table, desc
 from sqlalchemy.orm import relationship, backref
 from sqlalchemy.ext.declarative import declarative_base
-from self_protection import protect,getS3cr3txLocalD,getS3cr3txLocalE  # Import your self-protection logic
+from self_protection import protect,sanitize_input,getHash,encStandard,decStandard  
 import openai
 import uuid
 from sensitive_data_sanitizer import SensitiveDataSanitizer
 from prompt_injection_sanitizer import Prompt_Injection_Sanitizer
 from self_protection import getS3cr3txLocalE,getS3cr3txLocalD 
+from aishieldsemail import send_secure_email
+import secrets
+
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your_secret_key' #str(getS3cr3txLocalD('Tdr9azbcjb3SXdad0pHi7SyjPog6RRT1yFM7lCeyTz6dEQeEi0vfOo8mI4DM4Eh/ldrc7MlyTQ7ah+UrhXYSJ9dloEcsa6P1bMNfNTA6hKGrqZfozJLnb/W6dHLIMhhpn6dgON9jIFHJBSK4/g7AdkMc53q6r+pmjJn/epoIFDCj5iNkjPahFO+K3UtAMNJ0Ey64AM4eC7YgAUUasBmbfBxUqmCR3E1KB4Z3BNKLmX4YGB6A1qHTAs8q6OcXYuT01PcbMk64bHQ5aOkut5YxqOK9ljdqpvkmm4rTkc6sXxgx40rJJWDgBzbV7NSglndorqWXudSBvnTj25/UNfPXWF1kRdCnhqGs3zm8TAidXXebdKVEG3yx1w0JEqGeMbG+XNPkHQPJ7gej/Sxoi92fzIf5vCO9i1YoKFMMvZTnw7fEZPeHED7JkoogqTuaBid3Q8u/61HK0clNvQBNOjm9KT8P7vTwfHWzWRZp0zKgimYEKBeVRSp9vLIKMu1a8y2quD7qY7n0AYZuxwFyoHOL7bZq0Eru6lJofBizO5cEcn5EUyC1aS5+0fJwskBIRHz+2AzEVhLVkUAmLeoDmCYrdIFm05irJ8ajHoXM9SMrOJCnBL9RFsZm/9KHB1XrHN/cG/MQXomNWF68WJLigiy+cLbgNcnvLGuLn5brktIJ/MI=')).lstrip('b\'').rstrip('\'')
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///aishieldsDBsql3'
+app.config['SECRET_KEY'] = ''
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////FullPath/To/aiShieldsDB3.db'
+email_from = ""
+smtpserver = ""
+smtpport = ""
+smtpp = ""
+smtpu = ""
+smtp_server = str(decStandard(smtpserver))
+smtp_port = str(decStandard(smtpport))
+smtp_p = str(decStandard(smtpp))
+smtp_u = str(decStandard(smtpu))
 db = SQLAlchemy(app)
+apis = [{"APIowner":"OpenAI","TextGen": {"Name":"ChatGPT","Models":[
+                {"Name":"GPT 4","details":{ "uri": "https://api.openai.com/v1/chat/completions","jsonv":"gpt-4"}},
+                {"Name":"GPT 4 Turbo Preview","details":{ "uri": "https://api.openai.com/v1/chat/completions","jsonv":"gpt-4-turbo-preview" }},
+                {"Name":"GPT 3.5 Turbo","details":{"uri":"https://api.openai.com/v1/chat/completions","jsonv": "gpt-3.5-turbo"}}
+                ]}},
+                {"APIowner":"Anthropic","TextGen": {"Name":"Claude","Models":[
+                {"Name":"Claude - most recent","details":{"uri": "https://api.anthropic.com/v1/messages","jsonv":"anthropic-version: 2023-06-01"}}
+                 ]}}]
 
 def app_context():
     app = Flask(__name__)
+    strAppKey = ''
+    app.secret_key = strAppKey.encode(str="utf-8")
+    csrf = CSRFProtect(app)
     with app.app_context():
         yield
 
@@ -24,41 +51,49 @@ Base = declarative_base()
 
 user_prompt_api_model = Table(
     "user_prompt_api_model",
-    Base.metadata,
-    Column("user_id", BigInteger,ForeignKey("users.id")),
-    Column("prompt_id", BigInteger, ForeignKey("inputPrompt.id")),
-    Column("preproc_prompt_id",BigInteger,ForeignKey("preprocInputPrompt.id")),
-    Column("apiresponse_id",BigInteger,ForeignKey("apiResponse.id")),
-    Column("aishields_report_id",BigInteger,ForeignKey("aiShieldsReport.id")),
-    Column("postproc_response_id",BigInteger,ForeignKey("postprocResponse.id")),
-    Column("GenApi_id",BigInteger,ForeignKey("GenApi.id"))
+    db.metadata,
+    db.Column("user_id", BigInteger,ForeignKey("users.id")),
+    db.Column("prompt_id", BigInteger, ForeignKey("inputPrompt.id")),
+    db.Column("preproc_prompt_id",BigInteger,ForeignKey("preprocInputPrompt.id")),
+    db.Column("apiresponse_id",BigInteger,ForeignKey("apiResponse.id")),
+    db.Column("aishields_report_id",BigInteger,ForeignKey("aiShieldsReport.id")),
+    db.Column("postproc_response_id",BigInteger,ForeignKey("postprocResponse.id")),
+    db.Column("GenApi_id",BigInteger,ForeignKey("GenApi.id"))
+)
+
+user_codes_users = Table(
+    "user_codes_users",
+    db.metadata,
+    db.Column("user_id", BigInteger,ForeignKey("users.id")),
+    db.Column("user_codes_id", BigInteger,ForeignKey("user_codes.id")),
 )
 user_api = Table(
     "user_api",
-    Base.metadata,
-    Column("user_id", BigInteger,ForeignKey("users.id")),
-    Column("genapi_id", BigInteger, ForeignKey("GenApi.id")),
+    db.metadata,
+    db.Column("user_id", BigInteger,ForeignKey("users.id")),
+    db.Column("genapi_id", BigInteger, ForeignKey("GenApi.id")),
 )
 
 user_api_cred = Table(
     "user_api_cred",
-    Base.metadata,
-    Column("user_id", BigInteger),
-    Column("api_id",BigInteger,ForeignKey("GenApi.id")),
-    Column("cred_id",BigInteger,ForeignKey("cred")),
-    Column("created_date",DateTime)
+    db.metadata,
+    db.Column("user_id", BigInteger,ForeignKey("users.id")),
+    db.Column("api_id",BigInteger,ForeignKey("GenApi.id")),
+    db.Column("cred_id",BigInteger,ForeignKey("cred.id")),
+    db.Column("created_date",DateTime)
 )
 
-class User(Base):
+class User(db.Model):
     __tablename__ = "users"
-    id = Column(BigInteger, primary_key=True)
-    username = Column(NVARCHAR)
-    first_name = Column(NVARCHAR)
-    last_name = Column(NVARCHAR)
-    passphrase = Column(NVARCHAR)
-    email = Column(NVARCHAR)
-    created_date = Column(DateTime,default=datetime.datetime.now(datetime.timezone.utc))
-    updated_date = Column(DateTime,default=datetime.datetime.now(datetime.timezone.utc))
+    id = db.Column(BigInteger, primary_key=True)
+    username = db.Column(NVARCHAR)
+    first_name = db.Column(NVARCHAR)
+    last_name = db.Column(NVARCHAR)
+    passphrase = db.Column(NVARCHAR)
+    email = db.Column(NVARCHAR)
+    user_verified = db.Column(Integer,default=0)
+    created_date = db.Column(DateTime,default=datetime.datetime.now(datetime.timezone.utc))
+    updated_date = db.Column(DateTime,default=datetime.datetime.now(datetime.timezone.utc))
     inputPrompts = relationship("InputPrompt",secondary=user_prompt_api_model)
     preprocPrompts = relationship("PreProcInputPrompt", secondary=user_prompt_api_model)
     apiResponses = relationship("ApiResponse",secondary=user_prompt_api_model)
@@ -67,30 +102,43 @@ class User(Base):
     genApis = relationship(
         "GenApi", secondary=user_api, back_populates="users"
     )
-
-class Credential(Base):
+    user_codes = relationship(
+        "UserCode", secondary=user_codes_users, back_populates="users",
+    )
+    
+class UserCode(db.Model):
+    __tablename__ = "user_codes"
+    id = db.Column(BigInteger, primary_key=True)
+    user_id = db.Column(BigInteger,ForeignKey("users.id"))
+    email = db.Column(NVARCHAR)
+    code = db.Column(NVARCHAR)
+    created_date = db.Column(DateTime,unique=False, default=datetime.datetime.now(datetime.timezone.utc))
+    users = relationship("User", back_populates="user_codes")
+class Credential(db.Model):
     __tablename__ = "cred"
-    id = Column(BigInteger, primary_key=True)
-    user_id = Column(BigInteger,ForeignKey("users.id"))
-    api_id = Column(BigInteger,ForeignKey("GenApi.id"))
-    username = Column(NVARCHAR)
-    email = Column(NVARCHAR)
-    token = Column(NVARCHAR, unique=False, nullable=True)
-    jwt = Column(NVARCHAR, unique=False, nullable=True)
-    header = Column(NVARCHAR, unique=False, nullable=True)
-    formfield = Column(NVARCHAR, unique=False, nullable=True)
-    created_date = Column(DateTime,unique=False, default=datetime.datetime.now(datetime.timezone.utc))
-    updated_date = Column(DateTime, unique=False, nullable=True)
+    id = db.Column(BigInteger, primary_key=True)
+    user_id = db.Column(BigInteger,ForeignKey("users.id"))
+    api_id = db.Column(BigInteger,ForeignKey("GenApi.id"))
+    username = db.Column(NVARCHAR)
+    email = db.Column(NVARCHAR)
+    token = db.Column(NVARCHAR, unique=False, nullable=True)
+    jwt = db.Column(NVARCHAR, unique=False, nullable=True)
+    header = db.Column(NVARCHAR, unique=False, nullable=True)
+    formfield = db.Column(NVARCHAR, unique=False, nullable=True)
+    created_date = db.Column(DateTime,unique=False, default=datetime.datetime.now(datetime.timezone.utc))
+    updated_date = db.Column(DateTime, unique=False, nullable=True)
 
-class GenApi(Base):
+class GenApi(db.Model):
     __tablename__ = "GenApi"
-    id = Column(BigInteger, primary_key=True)
-    uri = Column(NVARCHAR, unique=False, nullable=False)
-    headers = Column(NVARCHAR, unique=False, nullable=False)
-    formfields = Column(NVARCHAR, unique=False, nullable=False)
-    model = Column(NVARCHAR, unique=True, nullable=False)
-    created_date = Column(DateTime,default=datetime.datetime.now(datetime.timezone.utc))
-    updated_date = Column(DateTime)
+    id = db.Column(BigInteger, primary_key=True)
+    api_owner = db.Column(NVARCHAR, unique=False, nullable=False)
+    api_name =  db.Column(NVARCHAR, unique=False, nullable=False)
+    uri = db.Column(NVARCHAR, unique=False, nullable=False)
+    headers = db.Column(NVARCHAR, unique=False, nullable=True)
+    formfields = db.Column(NVARCHAR, unique=False, nullable=True)
+    model = db.Column(NVARCHAR, unique=True, nullable=False)
+    created_date = db.Column(DateTime,default=datetime.datetime.now(datetime.timezone.utc))
+    updated_date = db.Column(DateTime,default=datetime.datetime.now(datetime.timezone.utc))
     inputPrompts = relationship("InputPrompt", secondary=user_prompt_api_model)
     preprocPrompts = relationship("PreProcInputPrompt", secondary=user_prompt_api_model)
     apiResponses = relationship("ApiResponse",secondary=user_prompt_api_model)
@@ -99,241 +147,536 @@ class GenApi(Base):
     users = relationship(
         "User", secondary=user_api, back_populates="genApis"
     )
-# class User(db.Model):
-#     id = db.Column(BigInteger, primary_key=True)
-#     username = db.Column(NVARCHAR, unique=True, nullable=False)
-#     email = db.Column(NVARCHAR, unique=True, nullable=False)
     
-class InputPrompt(Base):
+# class User(db.Model):
+#     id = db.db.Column(BigInteger, primary_key=True)
+#     username = db.db.Column(NVARCHAR, unique=True, nullable=False)
+#     email = db.db.Column(NVARCHAR, unique=True, nullable=False)
+    
+class InputPrompt(db.Model):
     __tablename__ = "inputPrompt"
-    id = Column(BigInteger, primary_key=True)
-    user_id = Column(BigInteger,ForeignKey("users.id"))
-    cred_id = Column(BigInteger, ForeignKey("cred.id"))
-    username = Column(NVARCHAR)
-    email = Column(NVARCHAR)
-    api_id = Column(BigInteger,ForeignKey("GenApi.id"))
-    api = Column(NVARCHAR)
-    internalPromptID = Column(NVARCHAR,unique=True)
-    inputPrompt = Column(NVARCHAR)
-    created_date = Column(DateTime,default=datetime.datetime.now(datetime.timezone.utc))
-    updated_date = Column(DateTime,default=datetime.datetime.now(datetime.timezone.utc))
+    id = db.Column(BigInteger, primary_key=True)
+    user_id = db.Column(BigInteger,ForeignKey("users.id"))
+    cred_id = db.Column(BigInteger, ForeignKey("cred.id"))
+    username = db.Column(NVARCHAR)
+    email = db.Column(NVARCHAR)
+    api_id = db.Column(BigInteger,ForeignKey("GenApi.id"))
+    api = db.Column(NVARCHAR)
+    internalPromptID = db.Column(NVARCHAR,unique=True)
+    inputPrompt = db.Column(NVARCHAR)
+    created_date = db.Column(DateTime,default=datetime.datetime.now(datetime.timezone.utc))
+    updated_date = db.Column(DateTime,default=datetime.datetime.now(datetime.timezone.utc))
   
     
-class PreProcInputPrompt(Base):
+class PreProcInputPrompt(db.Model):
     __tablename__ = "preprocInputPrompt"
-    id = Column(BigInteger, primary_key=True)
-    user_id = Column(BigInteger,ForeignKey("users.id"))
-    username = Column(NVARCHAR)
-    email = Column(NVARCHAR)
-    api_id = Column(BigInteger,ForeignKey("GenApi.id"))
-    api = Column(NVARCHAR,unique=False,nullable=False)
-    internalPromptID = Column(NVARCHAR,nullable=False)
-    rawInputPrompt_id = Column(BigInteger,ForeignKey("inputPrompt.id"),nullable=False)
-    inputPrompt = Column(NVARCHAR,unique=False,nullable=False)
-    preProcInputPrompt = Column(NVARCHAR,unique=False,nullable=False)
-    SensitiveDataSanitizerReport = Column(NVARCHAR,unique=False,nullable=True)
-    PromptInjectionReport = Column(NVARCHAR,unique=False,nullable=True)    
-    OverrelianceReport = Column(NVARCHAR,unique=False,nullable=True)
-    created_date = Column(DateTime,default=datetime.datetime.now(datetime.timezone.utc))
-    updated_date = Column(DateTime,default=datetime.datetime.now(datetime.timezone.utc))
+    id = db.Column(BigInteger, primary_key=True)
+    user_id = db.Column(BigInteger,ForeignKey("users.id"))
+    username = db.Column(NVARCHAR)
+    email = db.Column(NVARCHAR)
+    api_id = db.Column(BigInteger,ForeignKey("GenApi.id"))
+    api = db.Column(NVARCHAR,unique=False,nullable=False)
+    internalPromptID = db.Column(NVARCHAR,nullable=False)
+    rawInputPrompt_id = db.Column(BigInteger,ForeignKey("inputPrompt.id"),nullable=False)
+    inputPrompt = db.Column(NVARCHAR,unique=False,nullable=False)
+    preProcInputPrompt = db.Column(NVARCHAR,unique=False,nullable=False)
+    SensitiveDataSanitizerReport = db.Column(NVARCHAR,unique=False,nullable=True)
+    PromptInjectionReport = db.Column(NVARCHAR,unique=False,nullable=True)    
+    OverrelianceReport = db.Column(NVARCHAR,unique=False,nullable=True)
+    created_date = db.Column(DateTime,default=datetime.datetime.now(datetime.timezone.utc))
+    updated_date = db.Column(DateTime,default=datetime.datetime.now(datetime.timezone.utc))
  
-class ApiResponse(Base):
+class ApiResponse(db.Model):
     __tablename__ = "apiResponse"
-    id = Column(BigInteger, primary_key=True)
-    user_id = Column(BigInteger,ForeignKey("users.id"))
-    username = Column(NVARCHAR)
-    email = Column(NVARCHAR)
-    internalPromptID = Column(NVARCHAR,unique=False,nullable=False)
-    preProcPrompt_id = Column(BigInteger,ForeignKey("preprocInputPrompt.id"))
-    rawInputPrompt_id = Column(BigInteger,ForeignKey("inputPrompt.id"))
-    externalPromptID = Column(NVARCHAR,unique=False,nullable=False)
-    api_id = Column(BigInteger,ForeignKey("GenApi.id"))
-    api = Column(NVARCHAR) 
-    rawoutput = Column(NVARCHAR)
-    created_date = Column(DateTime,default=datetime.datetime.now(datetime.timezone.utc))
+    id = db.Column(BigInteger, primary_key=True)
+    user_id = db.Column(BigInteger,ForeignKey("users.id"))
+    username = db.Column(NVARCHAR)
+    email = db.Column(NVARCHAR)
+    internalPromptID = db.Column(NVARCHAR,unique=False,nullable=False)
+    preProcPrompt_id = db.Column(BigInteger,ForeignKey("preprocInputPrompt.id"))
+    rawInputPrompt_id = db.Column(BigInteger,ForeignKey("inputPrompt.id"))
+    externalPromptID = db.Column(NVARCHAR,unique=False,nullable=False)
+    api_id = db.Column(BigInteger,ForeignKey("GenApi.id"))
+    api = db.Column(NVARCHAR) 
+    rawoutput = db.Column(NVARCHAR)
+    created_date = db.Column(DateTime,default=datetime.datetime.now(datetime.timezone.utc))
       
-class PostProcResponse(Base):
+class PostProcResponse(db.Model):
     __tablename__ = "postprocResponse"
-    id = Column(BigInteger, primary_key=True)
-    rawInputPrompt_id = Column(BigInteger, ForeignKey("inputPrompt.id"))
-    internalPromptID = Column(NVARCHAR,unique=False,nullable=False)
-    preProcPrompt_id = Column(BigInteger, ForeignKey("preprocInputPrompt.id"))
-    externalPromptID = Column(NVARCHAR,unique=False,nullable=False)
-    user_id = Column(BigInteger,ForeignKey("users.id"))
-    username = Column(NVARCHAR)
-    email = Column(NVARCHAR)
-    api_id = Column(BigInteger,ForeignKey("GenApi.id"))
-    api = Column(NVARCHAR,unique=False,nullable=False)
-    rawResponseID = Column(BigInteger,ForeignKey("apiResponse.id"))
-    rawOutputResponse = Column(NVARCHAR,unique=False,nullable=False)
-    postProcOutputResponse = Column(NVARCHAR,unique=False,nullable=False)    
-    created_date = Column(DateTime,default=datetime.datetime.now(datetime.timezone.utc))
+    id = db.Column(BigInteger, primary_key=True)
+    rawInputPrompt_id = db.Column(BigInteger, ForeignKey("inputPrompt.id"))
+    inputPromptID = db.Column(NVARCHAR,unique=False,nullable=False)
+    preProcPrompt_id = db.Column(BigInteger, ForeignKey("preprocInputPrompt.id"))
+    externalPromptID = db.Column(NVARCHAR,unique=False,nullable=False)
+    user_id = db.Column(BigInteger,ForeignKey("users.id"))
+    username = db.Column(NVARCHAR)
+    email = db.Column(NVARCHAR)
+    api_id = db.Column(BigInteger,ForeignKey("GenApi.id"))
+    api = db.Column(NVARCHAR,unique=False,nullable=False)
+    rawResponseID = db.Column(BigInteger,ForeignKey("apiResponse.id"))
+    rawOutputResponse = db.Column(NVARCHAR,unique=False,nullable=False)
+    InsecureOutputHandlingReport = db.Column(NVARCHAR,unique=False,nullable=False)
+    postProcOutputResponse = db.Column(NVARCHAR,unique=False,nullable=False)    
+    created_date = db.Column(DateTime,default=datetime.datetime.now(datetime.timezone.utc))
     
-class AiShieldsReport(Base):
+class AiShieldsReport(db.Model):
     __tablename__ = "aiShieldsReport"
-    id = Column(BigInteger, primary_key=True)
-    rawInputPrompt_id = Column(BigInteger, ForeignKey("inputPrompt.id"))
-    preProcPrompt_id = Column(BigInteger, ForeignKey("preprocInputPrompt.id"))
-    rawResponse_id = Column(BigInteger, ForeignKey("apiResponse.id"))
-    postProcResponse_id = Column(BigInteger, ForeignKey("postprocResponse.id"))
-    internalPromptID = Column(NVARCHAR,unique=False,nullable=False)
-    externalPromptID = Column(NVARCHAR,unique=False,nullable=True)
-    user_id = Column(BigInteger,ForeignKey("users.id"))
-    username = Column(NVARCHAR, unique=False, nullable=False)
-    email = Column(NVARCHAR, unique=False, nullable=False)
-    api = Column(NVARCHAR,unique=False,nullable=False)
-    SensitiveDataSanitizerReport = Column(NVARCHAR,unique=False,nullable=True)
-    PromptInjectionReport = Column(NVARCHAR,unique=False,nullable=True)    
-    OverrelianceReport = Column(NVARCHAR,unique=False,nullable=True)
-    InsecureOutputReportHandling = Column(NVARCHAR,unique=False,nullable=True)     
-    created_date = Column(DateTime,default=datetime.datetime.now(datetime.timezone.utc))
-    updated_date = Column(DateTime)
+    id = db.Column(BigInteger, primary_key=True)
+    rawInputPrompt_id = db.Column(BigInteger, ForeignKey("inputPrompt.id"))
+    preProcPrompt_id = db.Column(BigInteger, ForeignKey("preprocInputPrompt.id"))
+    rawResponse_id = db.Column(BigInteger, ForeignKey("apiResponse.id"))
+    postProcResponse_id = db.Column(BigInteger, ForeignKey("postprocResponse.id"))
+    internalPromptID = db.Column(NVARCHAR,unique=False,nullable=False)
+    externalPromptID = db.Column(NVARCHAR,unique=False,nullable=True)
+    user_id = db.Column(BigInteger,ForeignKey("users.id"))
+    username = db.Column(NVARCHAR, unique=False, nullable=False)
+    email = db.Column(NVARCHAR, unique=False, nullable=False)
+    api_id = db.Column(BigInteger,ForeignKey("GenApi.id"))
+    api = db.Column(NVARCHAR,unique=False,nullable=False)
+    SensitiveDataSanitizerReport = db.Column(NVARCHAR,unique=False,nullable=True)
+    PromptInjectionReport = db.Column(NVARCHAR,unique=False,nullable=True)    
+    OverrelianceReport = db.Column(NVARCHAR,unique=False,nullable=True)
+    InsecureOutputReportHandling = db.Column(NVARCHAR,unique=False,nullable=True)     
+    created_date = db.Column(DateTime,default=datetime.datetime.now(datetime.timezone.utc))
+    updated_date = db.Column(DateTime)
     
 @app.before_request
 def before_request():
     # Use your self-protection logic here
     if not protect(request):
-       flash('Something went wrong, please try again', 'success')
-       abort(400)
+        #MDOS (Model Denial of Service entrypoint)
+        flash('Something went wrong, please try again', 'success')
+        abort(400)
     
-@app.route('/',methods=['GET', 'POST'])
+@app.route("/",methods=['GET','POST'])
+def home():
+    return redirect(url_for('index'))
+
+@app.route("/index",methods=['GET','POST'])
 def index():
-    if request.method == 'GET':
-        return "<!DOCTYPE html><html><head><title>AiShields</title></head><body><br/><br/><center><img src='http://127.0.0.1:5000/static/aishields.jpg' alt='AiShields' style='height:300px;width:300px'/><br/><br/><form method='POST' action='/'><label for='username'>Name:&nbsp;&nbsp;&nbsp;</label><input type='text' name='username' required><br/><br/><label for='email'>Email:&nbsp;&nbsp;&nbsp;</label><input type='email' name='email' required><br/><br/><input type='submit' name='submit' value='Go'/></form></center></body></html>"
-    if request.method == 'POST':
-        apis = [{"APIowner":"OpenAI","TextGen": {"Name":"ChatGPT","Models":[
-                {"Name":"GPT 4","details":{ "uri": "https://api.openai.com/v1/chat/completions","jsonv":"gpt-4"}},
-                {"Name":"GPT 4 Turbo Preview","details":{ "uri": "https://api.openai.com/v1/chat/completions","jsonv":"gpt-4-turbo-preview" }},
-                {"Name":"GPT 3.5 Turbo","details":{"uri":"https://api.openai.com/v1/chat/completions","jsonv": "gpt-3.5-turbo"}}
-                ]}},
-                {"APIowner":"Anthropic","TextGen": {"Name":"Claude","Models":[
-                {"Name":"Most recent","details":{"uri": "https://api.anthropic.com/v1/messages","jsonv":"anthropic-version: 2023-06-01"}}]}}]
-                   #,
-            #{"model": "GPT 3.5 Turbo Instruct", "uri": "https://api.anthropic.com/v1/messages","jsonv":"gpt-3.5-turbo-instruct"},
-            #{"model": "Babbage 2", "uri": "https://api.anthropic.com/v1/messages","jsonv":"babbage-002" },
-            #{"model": "DaVinci 2","uri":"https://api.anthropic.com/v1/messages","jsonv": "davinci-002"},
-        username = (
-            db.session.query(User.username)
-            .filter(User.username == str(request.form["username"]).upper())
-            .one_or_none()
-        )
-        # Does the book by the author and publisher already exist?
-        if username is not None:
-            return render_template('chat.html',apis=apis, email=request.form.get("email"),username=request.form.get("username"))
-        email = (
-            db.session.query(User.id)
-            .filter(User.email == str(request.form["email"]).lower())
-            .one_or_none()
-        )
-        if email is not None:
-            return render_template('chat.html',apis=apis, email=request.form.get("email"),username=request.form.get("username"))
-        user = User(username=str(request.form["username"]).lower(), email=str(request.form["email"]).lower(),created_date=datetime.datetime.now(datetime.timezone.utc))
-        db.session.add(user)
-        db.session.commit()
-        return render_template('chat.html',apis=apis, email=request.form.get("email"),username=request.form.get("username"))
+    try:
+        if request.method == 'GET':
+            return render_template('index.html',apis=apis, email=request.form.get("email"))
+        if request.method == 'POST':
+            #,
+                #{"model": "GPT 3.5 Turbo Instruct", "uri": "https://api.anthropic.com/v1/messages","jsonv":"gpt-3.5-turbo-instruct"},
+                #{"model": "Babbage 2", "uri": "https://api.anthropic.com/v1/messages","jsonv":"babbage-002" },
+                #{"model": "DaVinci 2","uri":"https://api.anthropic.com/v1/messages","jsonv": "davinci-002"},
+            email = (
+                db.session.query(User)
+                .filter(User.email == str(request.form.get('email')).lower(),User.user_verified==1).order_by(desc(User.id))
+                .first()
+            )
+            if email is None:
+                flash("Please create an account")
+                return render_template('newaccount.html',apis=apis, email=request.form.get("email"))
+            else:
+                # user = User(username="", email=str(request.form["email"]).lower(),user_verified=0,created_date=datetime.datetime.now(datetime.timezone.utc))
+                # db.session.add(user)
+                # db.session.commit()
+                return render_template('login.html',apis=apis, email=request.form.get("email"))
+    except Exception as err:
+        print('An error occured: ' + str(err))  
+        return render_template('index.html',apis=apis, email=request.form.get("email"))
+     
+@app.route('/newaccount',methods=['GET','POST'])
+def newaccount():
+    try:
+        if request.method == 'GET':
+            return render_template('newaccount.html')
+        if request.method == 'POST':
+            email = (
+                db.session.query(User)
+                .filter(User.email == str(request.form.get("email")).lower(),User.user_verified == 1)
+                .one_or_none()
+            )
+            if email is not None:
+                if email.user_verified == 1:
+                    flash("Email is already registered, please login")
+                    return render_template('login.html',email=email.email)
+            bmonth = str(int(request.form["bmonth"]))
+            bday = str(int(request.form["bday"]))
+            byear = str(int(request.form["byear"]))
+            birthdate = datetime.date(int(byear),int(bmonth),int(bday))
+            yearstoadd = 18
+            currentdate = datetime.datetime.today()
+            difference_in_years = relativedelta(currentdate, birthdate).years
+            if difference_in_years >= yearstoadd: 
+                firstname = sanitize_input(str(request.form["firstname"]).rstrip(' ').lstrip(' '))
+                lastname = sanitize_input(str(request.form["lastname"]).rstrip(' ').lstrip(' '))
+                username = str(firstname).capitalize() + " " + str(lastname).capitalize()
+                user = User(username=str(username),first_name=str(firstname),last_name=str(lastname),email=str(request.form["email"]).lower(),passphrase=getHash(request.form['passphrase']),user_verified=0,created_date=datetime.datetime.now(datetime.timezone.utc))
+                db.session.add(user)
+                db.session.commit()
+                db.session.flush(objects=[user])
+                strCode = ""
+                for i in range(6):
+                    strCode += str(secrets.randbelow(10))
+                code = UserCode(user_id=user.id,email=user.email,code=strCode)
+                db.session.add(code)
+                db.session.commit()
+                db.session.flush(objects=[code])
+                to_email = user.email
+                from_email = smtp_u
+                s_server = smtp_server
+                s_port = smtp_port
+                s_p = smtp_p
+                m_subj = "Please verify your email for AiShields.org"
+                m_message = "Dear " + firstname + ", \n\n Please enter the following code: " + strCode + " in the email verification form. \n\n Thank you, \n\n Support@AiShields.org"
+                send_secure_email(to_email,from_email,s_server,s_port,from_email,s_p,m_subj,m_message)
+                return render_template('verifyemail.html',apis=apis, email=user.email)
+            else:
+                flash("You must be 18 years or older to create an account.")
+                return render_template("newaccount.html",apis=apis, email=request.form.get(email))
+        else:
+            return render_template("login.html")
+    except Exception as err:
+        print('An error occured: ' + str(err))
+
+
+@app.route('/login',methods=['GET', 'POST'])
+def login():
+    try:
+        if request.method == 'GET':
+            return render_template('login.html', email=request.form.get("email"),username=request.form.get("username"))
+        if request.method == 'POST':
+            user_entered_code = getHash(str(request.form["passphrase"]))
+            user =  (db.session.query(User)
+                .filter(User.email == str(request.form["email"]).lower(), User.passphrase==str(user_entered_code),User.user_verified==1).order_by(desc(User.created_date))
+                .one_or_none()
+                ) 
+            if user is not None:
+                #print(str(user().id))
+                if str(user.passphrase) == user_entered_code:
+                    if int(user.user_verified) == 1:
+                        return render_template('chat.html', email=user.email,username=user.first_name + " " + user.last_name,apis=apis)
+                    else:
+                        strCode = ""
+                        for i in range(6):
+                            strCode += str(secrets.randbelow(10))
+                        user_id = user().id
+                        code = UserCode(user_id=user_id,email=user().email,code=strCode)
+                        db.session.add(code)
+                        db.session.commit()
+                        db.session.flush(objects=[code])
+                        to_email = user().email
+                        from_email = smtp_u
+                        s_server = smtp_server
+                        s_port = smtp_port
+                        s_p = smtp_p
+                        m_subj = "Please verify your email for AiShields.org"
+                        m_message = "Dear " + user().first_name + ", \n\n Please enter the following code: " + strCode + " in the email verification form. \n\n Thank you, \n\n Support@AiShields.org"
+                        send_secure_email(to_email,from_email,s_server,s_port,from_email,s_p,m_subj,m_message)
+                        return render_template('verifyemail.html',apis=apis, email=user().email,username=user().first_name + " " + user().last_name)
+                else:
+                    flash("The username and password combination you used did not match our records")
+                    return render_template('login.html')
+            else:
+                return render_template('login.html')
+    except Exception as err:
+        print('An error occured: ' + str(err))   
+        
+@app.route('/verifyemail',methods=['GET', 'POST'])
+def verifyemail():
+    try:
+        if request.method == 'GET':
+            return render_template('verifyemail.html', email=request.form.get(key='email'))
+        if request.method == 'POST':
+            user_entered_code = str(request.form.get(key='passphrase'))
+            usercodes = (db.session.query(UserCode).all)
+            user_stored_code = (db.session.query(UserCode).filter(UserCode.email == str(request.form.get(key="email")).lower()).order_by(desc(UserCode.id)).first()) 
+            user_code = str(user_stored_code.code)
+            if user_code is not None:
+                if user_code == user_entered_code:
+                    user = (
+                        db.session.query(User)
+                        .filter(User.email == str(request.form["email"]).lower())
+                        .order_by(desc(User.id)).first()
+                    )
+                    user.user_verified = 1
+                    db.session.add(user)
+                    db.session.commit()
+                    db.session.flush(objects=[user])
+                    userName = str(user.first_name + " " + user.last_name)
+                    return render_template('chat.html', email=request.form.get("email"),username=userName,apis=apis)
+                else:
+                    flash("Code did not match, please try entering the code again")
+                    return render_template('verifyemail.html', email=request.form.get("email"))
+            flash("Please enter the code from your email")
+            return render_template('verifyemail.html', email=request.form.get("email"))
+        return render_template('verifyemail.html', email=request.form.get("email"))
+    except Exception as err:
+        print('An error occured: ' + str(err))  
+ 
+@app.route('/reset',methods=['GET','POST'])
+def reset():
+    try:
+        if request.method == 'GET':
+            strCode = request.query_string.decode('utf-8').split('=')[1]
+            return render_template('reset.html',code=strCode)
+        if request.method == 'POST':
+            code = str(request.form.get("code"))
+            usercode = (
+                db.session.query(UserCode)
+                .filter(UserCode.code == code)
+                .one_or_none()
+            )
+            if usercode is not None:
+                user = (db.session.query(User).filter(User.id == usercode.user_id)
+                        .one_or_none())
+                user.passphrase = str(getHash(request.form.get(key="passphrase")))
+                db.session.add(user)
+                db.session.commit()
+                db.session.flush(objects=[user])
+                to_email = user.email
+                from_email = smtp_u
+                s_server = smtp_server
+                s_port = smtp_port
+                s_p = smtp_p
+                m_subj = "Your password was just reset for AiShields.org"
+                m_message = "Dear " + user.first_name + ", \n\n Your password was just changed for AiShields. \n\nPlease contact us via email at support@aishields.org if you did not just change your password. \n\n Thank you, \n\n Support@AiShields.org"
+                send_secure_email(to_email,from_email,s_server,s_port,from_email,s_p,m_subj,m_message)
+                flash("Your password has been changed")
+                return render_template('login.html')
+            else:
+                return render_template("login.html")
+        else:
+            return render_template("login.html")
+    except Exception as err:
+        print('An error occured: ' + str(err))
+        return render_template("login.html")
+
+@app.route('/forgot',methods=['GET','POST'])
+def forgot():
+    try:
+        if request.method == 'GET':
+            return render_template('forgot.html')
+        if request.method == 'POST':
+            email = str(request.form.get("email")).lower()
+            
+            user = (
+                db.session.query(User)
+                .filter(User.email == email,User.user_verified == 1)
+                .one_or_none()
+            )
+            if user is not None:
+                if user.user_verified == 1:
+                    strCode = str(uuid.uuid4())
+                    code = UserCode(user_id=user.id,email=user.email,code=strCode)
+                    db.session.add(code)
+                    db.session.commit()
+                    db.session.flush(objects=[code])
+                    to_email = user.email
+                    from_email = smtp_u
+                    s_server = smtp_server
+                    s_port = smtp_port
+                    s_p = smtp_p
+                    m_subj = "Please reset your email for AiShields.org"
+                    m_message = "Dear " + user.first_name + ", \n\n Please click this link: <a href='http://127.0.0.1:5000/reset?code=" + strCode +"' or paste it into your browser address bar to change your password. \n\nThis link will expire in 20 minutes. \n\n Thank you, \n\n Support@AiShields.org"
+                    send_secure_email(to_email,from_email,s_server,s_port,from_email,s_p,m_subj,m_message)
+                    return render_template('login.html')
+            else:
+                return render_template("login.html")
+        else:
+            return render_template("login.html")
+    except Exception as err:
+        print('An error occured: ' + str(err))
+        return render_template("login.html")
+        
 
 @app.route('/chat', methods=['GET', 'POST'])
 def chat():
-    apis = [{"APIowner":"OpenAI","TextGen": {"Name":"ChatGPT","Models":[
-                {"Name":"GPT 4","details":{ "uri": "https://api.openai.com/v1/chat/completions","jsonv":"gpt-4"}},
-                {"Name":"GPT 4 Turbo Preview","details":{ "uri": "https://api.openai.com/v1/chat/completions","jsonv":"gpt-4-turbo-preview" }},
-                {"Name":"GPT 3.5 Turbo","details":{"uri":"https://api.openai.com/v1/chat/completions","jsonv": "gpt-3.5-turbo"}}
-                ]}},
-                {"APIowner":"Anthropic","TextGen": {"Name":"Claude","Models":[
-                {"Name":"Claude - most recent","details":{"uri": "https://api.anthropic.com/v1/messages","jsonv":"anthropic-version: 2023-06-01"}}
-                 ]}}]
-    if request.method == 'GET':
-        return render_template('chat.html',apis=apis)
-    if request.method == 'POST':
-        #if protect(request):
-        message = ""
-        api = ""
-        if request.form['api'] is not None:
-            api = request.form['api']
-        else:
-            flash("Please select an api and model from the list")
-            return render_template('chat.html',apis=apis, username=username,email=email)
-        token = ""
-        if request.form['apitoken'] is not None:
-            token = request.form['apitoken']
-        else:
-            flash("Please enter an api token for the api you select")
-            return render_template('chat.html',apis=apis, username=username,email=email)
-        #securely store cred:
-        strEncToken = token
-        token = ""
-        username = ""
-        if request.form['username'] is not None:
-            username = str(request.form['username']).upper()
-        email = ""
-        if request.form['email'] is not None:
-            email = str(request.form['email']).lower()
-        inputprompt = ""
-        if request.form['inputprompt'] is not None:
-            inputprompt = request.form['inputprompt']
-        else:
-            flash("Please enter a prompt message to send to the api you select")
-            return render_template('chat.html',apis=apis, username=username,email=email)
-        user = (
-            db.session.query(User.id)
-            .filter(User.email == str(email).lower())
-            .one_or_none()
-        )
-        userid = ""
-        if user is not None:
-            userid = user[0]
-        else:
-            message = "Please enter your email"
-            return render_template('chat.html',apis=apis, username=username,email=email)
-        storetoken = "No"
-        if request.form['storetoken'] is not None:
-            storetoken = request.form['storetoken']
-        if storetoken == "Yes":
-            cred = Credential(user_id=userid,username=str(username).upper(),email=str(email).lower(),token=strEncToken)
-            db.session.add(cred)
-        #preprocess the prompt
-        internalID = str(uuid.uuid4())
-        lstApi = str(api).split('-')
-        strApi = lstApi[0]
-        strModel = ""
-        for a in apis:
-            if a["APIowner"] == lstApi[0]:
-                for m in a["TextGen"]["Models"]:
-                    if m["Name"] == lstApi[2]:
-                        strModel = m["details"]["jsonv"]
-                        break 
-                    else:
-                        continue
-    
-        rawInput = InputPrompt(internalPromptID=internalID,user_id=userid,username=username,email=email,api=api,inputPrompt=inputprompt)
-        db.session.add(rawInput)
-        db.session.commit()
-        preprocessedPrompt = aishields_sanitize_input(rawInput)
-        strTempApiKey = strEncToken
-        client = openai.Client(api_key=str(strEncToken))
-        stream = client.chat.completions.create(
-            model=strModel,
-            messages=[{"role": "user", "content": preprocessedPrompt}],
-            stream=True,
-        )
-        strRawOutput = ""
-        for chunk in stream:
-            if chunk.choices[0].delta.content is not None:
-                strRawOutput += chunk.choices[0].delta.content
-        
-        postprocessedPrompt = aishields_postprocess_output(strRawOutput)
-        # Basic input validation (you should improve this)
-            # if not username or not email:
-            #     flash('Both username and email are required.', 'error')
-            # else:
-            #     user = User(username=username, email=email)
-            #     db.session.add(user)
-            #     db.session.commit()
-            #     flash('User added successfully!', 'success')
-    # Fetch the list of users from the database
-        # prepare report
-        
-    return render_template('chat.html',apis=apis,output=strRawOutput,response=strRawOutput)
+    try:
+        if request.method == 'GET':
+            user = (
+                        db.session.query(User)
+                        .filter(User.email == str(email).lower(),User.user_verified == 1)
+                        .one_or_none()
+                    )
+            if user is not None:
+                return render_template('newaccount.html',apis=apis,email=request.form["email"])
+            return render_template('chat.html',apis=apis,email=request.form["email"],username=user.username)
+        if request.method == 'POST':
+            #if protect(request):
+            message = ""
+            api = ""
+            if request.form['api'] is not None:
+                api = request.form['api']
+            else:
+                flash("Please select an api and model from the list")
+                return render_template('chat.html',apis=apis, username=username,email=email)
+            token = ""
+            if request.form['apitoken'] is not None:
+                token = request.form['apitoken']
+            else:
+                flash("Please enter an api token for the api you select")
+                return render_template('chat.html',apis=apis, username=username,email=email)
+            #securely store cred:
+            strEncToken = encStandard(token)
+            token = ""
+            username = ""
+            if request.form['username'] is not None:
+                username = str(request.form['username'])
+            email = ""
+            if request.form['email'] is not None:
+                email = str(request.form['email']).lower()
+            inputprompt = ""
+            if request.form['inputprompt'] is not None:
+                inputprompt = request.form['inputprompt']
+            else:
+                flash("Please enter a prompt message to send to the api you select")
+                return render_template('chat.html',apis=apis, username=username,email=email)
+            user = (
+                db.session.query(User)
+                .filter(User.email == str(email).lower(),User.user_verified ==1).order_by(desc(User.id))
+                .first()
+            )
+            userid = ""
+            if user is not None:
+                userid = user.id
+            else:
+                message = "Please enter your email"
+                return render_template('chat.html',apis=apis, username=username,email=email)
+            storetoken = "No"
+            if request.form['storetoken'] is not None:
+                storetoken = request.form['storetoken']
+            if storetoken == "Yes":
+                cred = Credential(user_id=userid,username=str(username).upper(),email=str(email).lower(),token=strEncToken)
+                db.session.add(cred)
+            #preprocess the prompt
+            internalID = str(uuid.uuid4())
+            lstApi = str(api).split(' ')
+            strApi = lstApi[0]
+            strModel = lstApi[1]
+            rawInput = InputPrompt(internalPromptID=internalID,user_id=userid,username=username,email=email,api=api,inputPrompt=inputprompt)
+            db.session.add(rawInput)
+            db.session.commit()
+            db.session.flush(objects=[rawInput])
+            rawInputObj = (
+                db.session.query(InputPrompt)
+                .filter(InputPrompt.internalPromptID == internalID)
+                .one_or_none)
+            apiObj = (
+                db.session.query(GenApi)
+                .filter(GenApi.model == str(strModel),GenApi.api_owner == strApi)
+                .one_or_none)
+            strRole = "user"
+            if request.form['role'] is not None:
+                strRole = request.form['role']
+            if apiObj:
+                preprocessedPromptString = aishields_sanitize_input(rawInput)
+                preprocessedPrompt = PreProcInputPrompt(
+                    internalPromptID=internalID,
+                    user_id=userid,
+                    api_id=apiObj().id,
+                    api=apiObj().uri,
+                    email=email,
+                    rawInputPrompt_id=rawInputObj().id,
+                    inputPrompt=rawInput.inputPrompt,
+                    preProcInputPrompt=preprocessedPromptString,
+                    username=username,
+                    SensitiveDataSanitizerReport = "AiShields Data Sanitizer removed the following from the raw input\n for your safety: \n" + str(escape(aishields_get_string_diff(rawInput.inputPrompt,preprocessedPromptString))),
+                    PromptInjectionReport = "",
+                    OverrelianceReport = ""
+                    )
+                db.session.add(preprocessedPrompt)
+                db.session.commit()
+                db.session.flush(objects=[preprocessedPrompt])
+                strTempApiKey = str(decStandard(str(strEncToken)))
+                client = openai.Client(api_key=str(strTempApiKey))
+                stream = client.chat.completions.create(
+                    model=strModel,
+                    messages=[{"role": strRole.lower(), "content": inputprompt}],
+                    stream=True,
+                )
+                strRawOutput = ""
+                for chunk in stream:
+                    if chunk.choices[0].delta.content is not None:
+                        strRawOutput += chunk.choices[0].delta.content
+                rawOutput = ApiResponse(
+                    internalPromptID=internalID,
+                    user_id=userid,
+                    api_id=apiObj().id,
+                    api=apiObj().uri,
+                    email=email,
+                    preProcPrompt_id=preprocessedPrompt.id,
+                    rawInputPrompt_id=rawInput.id,
+                    rawoutput=strRawOutput,
+                    externalPromptID="",
+                    username=username,
+                    )
+                db.session.add(rawOutput)
+                db.session.commit()
+                db.session.flush(objects=[rawOutput])
+                rawOutputObj = (
+                    db.session.query(ApiResponse)
+                        .filter(ApiResponse.internalPromptID == internalID)
+                        .one_or_none)
+                preProcObj = (
+                    db.session.query(PreProcInputPrompt)
+                        .filter(PreProcInputPrompt.internalPromptID == internalID)
+                        .one_or_none)
+                postProcPromptObj = PostProcResponse(
+                    rawInputPrompt_id = rawInputObj().id,
+                    inputPromptID = internalID,
+                    preProcPrompt_id = preProcObj().id,
+                    externalPromptID = rawOutput.externalPromptID,
+                    user_id = userid,
+                    username = username,
+                    email = email,
+                    api_id = apiObj().id,
+                    api = apiObj().uri,
+                    rawResponseID = rawOutputObj().id,
+                    rawOutputResponse = rawOutputObj().rawoutput,
+                    postProcOutputResponse = "",
+                    InsecureOutputHandlingReport = "",
+                    created_date = datetime.datetime.now(datetime.timezone.utc)
+                )
+                postProcPromptObj = aishields_postprocess_output(postProcPromptObj)
+                db.session.add(postProcPromptObj)
+                db.session.commit()
+                db.session.flush(objects=[postProcPromptObj])
+                postProcRespObj = (
+                    db.session.query(PostProcResponse)
+                        .filter(PostProcResponse.inputPromptID == internalID)
+                        .one_or_none)
+                postProcID = -1
+                if postProcRespObj is not None:
+                    postProcID = postProcRespObj().id 
+                # prepare report
+                aiShieldsReportObj = AiShieldsReport(
+                    rawInputPrompt_id = rawInputObj().id,
+                    internalPromptID = internalID,
+                    preProcPrompt_id = preProcObj().id,
+                    externalPromptID = rawOutput.externalPromptID,
+                    user_id = userid,
+                    username = username,
+                    email = email,
+                    api_id = apiObj().id,
+                    api = apiObj().uri,
+                    rawResponse_id = rawOutputObj().id,
+                    #rawOutputResponse = rawOutputObj().rawoutput,
+                    #postProcOutputResponse = postProcRespObj().postProcOutputResponse,    
+                    created_date = datetime.datetime.now(datetime.timezone.utc),
+                    postProcResponse_id = postProcRespObj().id,
+                    SensitiveDataSanitizerReport = preProcObj().SensitiveDataSanitizerReport,
+                    PromptInjectionReport = preProcObj().PromptInjectionReport,    
+                    OverrelianceReport = preProcObj().OverrelianceReport,
+                    InsecureOutputReportHandling = postProcRespObj().InsecureOutputHandlingReport,     
+                    updated_date = datetime.datetime.now(datetime.timezone.utc)
+                )
+                db.session.add(aiShieldsReportObj)
+                db.session.commit()
+                db.session.flush(objects=[aiShieldsReportObj])
+                findings = [{"category":"Sensitive Data","details":aiShieldsReportObj.SensitiveDataSanitizerReport,"id":aiShieldsReportObj.internalPromptID},
+                { "category":"Prompt Injection","details":aiShieldsReportObj.PromptInjectionReport,"id":aiShieldsReportObj.internalPromptID},
+                {"category":"Overreliance","details":aiShieldsReportObj.OverrelianceReport,"id":aiShieldsReportObj.internalPromptID},
+                {"category":"Insecure Output Handling","details":aiShieldsReportObj.InsecureOutputReportHandling,"id":aiShieldsReportObj.internalPromptID}]
+                
+        return render_template('chat.html',apis=apis,email=email,username=username,response=postProcRespObj().postProcOutputResponse,findings=findings,output=True)
+    except Exception as err:
+        print('An error occured: ' + str(err)) 
+        return render_template('chat.html',apis=apis,email=email,username=username) 
 
 def aishields_sanitize_input(input:InputPrompt):
     #now sanitize for Prompt Injection
@@ -355,26 +698,60 @@ def aishields_sanitize_input(input:InputPrompt):
     
     #now assess for Overreliance
     return strPreProcInput
+        #sensitive data sanitization:
+        # now sanitize for privacy protected data
+    try:
+        strPreProcInput = ""
+        strRawInputPrompt = input.inputPrompt
+        sanitizedInput = sanitize_input(strRawInputPrompt)
+        #sds = SensitiveDataSanitizer()
+        #strSensitiveDataSanitized = sds.sanitize_input(input_content=strRawInputPrompt)           
+        strPreProcInput += str(sanitizedInput)
+        #now sanitize for Prompt Injection
+        #now assess for Overreliance
+        return strPreProcInput
+    except Exception as err:
+        print('An error occured: ' + str(err))  
     
-def aishields_postprocess_output(input):
+def aishields_postprocess_output(postProcResponseObj:PostProcResponse):
     #insecure output handing
-    
-    strPostProcessedOutput = input
-    #handle and sanitize raw output
-    #return post processed Output
-    return strPostProcessedOutput
+    try:
+        strPostProcessedOutput = sanitize_input(postProcResponseObj.rawOutputResponse)
+        postProcResponseObj.postProcOutputResponse = escape(str(strPostProcessedOutput))
+        postProcResponseObj.InsecureOutputHandlingReport = "AiShields Data Sanitizer removed the following from the raw output\n for your safety: \n" + str(escape(aishields_get_string_diff(postProcResponseObj.rawOutputResponse,strPostProcessedOutput)))
+        #handle and sanitize raw output
+        #return post processed Output
+        return postProcResponseObj
+    except Exception as err:
+        print('An error occured: ' + str(err))  
 
 def aishields_store_cred(input:Credential):
-    #insecure output handing
-    db.session.add(input)
-    db.session.commit()
-    #handle and sanitize raw output
-    #return post processed Output
-    return True
+    try:
+        #insecure output handing
+        db.session.add(input)
+        db.session.commit()
+        #handle and sanitize raw output
+        #return post processed Output
+        return True
+    except Exception as err:
+        print('An error occured: ' + str(err))  
+        
+def aishields_get_string_diff(strA,strB):
+    try:
+        res = ""
+        if len(str(strA))>len(str(strB)): 
+            res=str(strA).replace(str(strB),'')            
+        else: 
+            res=str(strB).replace(str(strA),'')
+        return res
+    except Exception as err:
+        print('An error occured: ' + str(err))  
 
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
         app.run(debug=True)
+        db.session.query(UserCode).filter(UserCode.id > 1, UserCode.id < 38).delete()
+        db.commit()
         #app.run(ssl_context=('cert.pem', 'key.pem')) #to test with https self signed cert
         
