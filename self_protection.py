@@ -14,7 +14,7 @@ from subprocess import Popen, PIPE
 
 app = Flask(__name__)
 strs3cr3txDLL = './helpers/s3cr3tx.dll'
-strPEMfileName = ''
+strPEMfileName = './helpers/Patrick-5e39e57f-0550-49f3-8db6-d33cd139168f.pem'
         
 # to_email = "recipient@example.com"
 # from_email = "your_email@example.com"
