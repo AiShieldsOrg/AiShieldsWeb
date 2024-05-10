@@ -1,0 +1,8 @@
+.venv/
+venv/
+__pycache__/
+
+.idea/
+
+databases/
+*.pem
