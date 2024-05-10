@@ -1,8 +1,9 @@
 import matplotlib.pyplot as plt
 from overreliance_data_sanitizer import OverrelianceDataSanitizer as ODS
 import os
+import time
 
-SEARCH_SCRIPT_DIRECTORY = 'C:\\Users\\crossfire234\\Desktop\\Software\\puppeteer-webscraping-nodejs'
+SEARCH_SCRIPT_DIRECTORY = ''
 
 if SEARCH_SCRIPT_DIRECTORY == '':
     SEARCH_SCRIPT_DIRECTORY = os.getcwd()
@@ -31,12 +32,19 @@ prompt_output_filepath = filedialog.askopenfilename(title="Find the AI response 
 with open(prompt_output_filepath,'r') as f:
     output_text = f.read()
 
+#=== this is the actual algorithm running. It will be timed
+
+start_time = time.time()
 
 ods = ODS()
 
 keyphrase_data_list = ods.get_keyphrases(input_text,SEARCH_SCRIPT_DIRECTORY, NUMBER_OF_SEARCHES,link_number_limit=NUMBER_OF_LINKS,stopword_list=STOPWORD_LIST)
 keyphrase_data_list = ods.get_articles(keyphrase_data_list,site_ignore_list=SITE_IGNORE_LIST)
 data_summary_list = ods.compare(keyphrase_data_list,output_text)
+
+end_time = time.time()
+
+print(f"Full pipeline took {end_time -start_time}.{4}")
 
 #=== this is just for plotting
 y = [data['link'] for data in data_summary_list]
