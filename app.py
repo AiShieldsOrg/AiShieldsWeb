@@ -81,6 +81,34 @@ user_api_cred = Table(
     db.Column("created_date",DateTime)
 )
 
+requests_client = Table(
+ "requests_client",
+    db.metadata,
+    db.Column("request_id", BigInteger,ForeignKey("requests.id")),
+    db.Column("client_id", BigInteger, ForeignKey("clients.id")),
+   
+)
+
+class ClientRequests(db.Model):
+    __tablename__ = "requests"
+    id = db.Column(BigInteger, primary_key=True)
+    client_id = db.Column(BigInteger,ForeignKey("clients.id"))
+    URL = db.Column(NVARCHAR)
+    Headers = db.Column(NVARCHAR)
+    request_type = db.Column(NVARCHAR)
+    Body = db.Column(NVARCHAR)
+    created_date = db.Column(DateTime,unique=False, default=datetime.datetime.now(datetime.timezone.utc))
+    clients = relationship("Clients", back_populates="requests_clients")
+
+class Clients(db.Model):
+    __tablename__ = "clients"
+    id = db.Column(BigInteger, primary_key=True)
+    requests_id = db.Column(BigInteger,ForeignKey("requests.id"))
+    IPaddress = db.Column(NVARCHAR)
+    MacAddress = db.Column(NVARCHAR)
+    created_date = db.Column(DateTime,unique=False, default=datetime.datetime.now(datetime.timezone.utc))
+    requests = relationship("ClientRequests", back_populates="requests_clients")
+
 class User(db.Model):
     __tablename__ = "users"
     id = db.Column(BigInteger, primary_key=True)
@@ -112,6 +140,7 @@ class UserCode(db.Model):
     code = db.Column(NVARCHAR)
     created_date = db.Column(DateTime,unique=False, default=datetime.datetime.now(datetime.timezone.utc))
     users = relationship("User", back_populates="user_codes")
+
 class Credential(db.Model):
     __tablename__ = "cred"
     id = db.Column(BigInteger, primary_key=True)
@@ -240,7 +269,17 @@ class AiShieldsReport(db.Model):
     
 @app.before_request
 def before_request():
-    # Use your self-protection logic here
+    #Save the request data for MDOS protection
+    requestObj = ClientRequests()
+    requestObj.URL = request.full_path
+    requestObj.Headers = json.dumps(request.headers)
+    requestObj.Body = json.dumps(request.form.to_dict)
+    requestObj.request_type = request.method
+    db.add(requestObj)
+    db.commit()
+    db.flush()
+    #MDOS (Model Denial of Service entrypoint)
+    #James Yu can add code here to handle MDOS protection
     if not protect(request):
         #MDOS (Model Denial of Service entrypoint)
         flash('Something went wrong, please try again', 'success')
