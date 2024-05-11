@@ -269,7 +269,17 @@ class AiShieldsReport(db.Model):
     
 @app.before_request
 def before_request():
-    # Use your self-protection logic here
+    #Save the request data for MDOS protection
+    requestObj = ClientRequests()
+    requestObj.URL = request.full_path
+    requestObj.Headers = json.dumps(request.headers)
+    requestObj.Body = json.dumps(request.form.to_dict)
+    requestObj.request_type = request.method
+    db.add(requestObj)
+    db.commit()
+    db.flush()
+    #MDOS (Model Denial of Service entrypoint)
+    #James Yu can add code here to handle MDOS protection
     if not protect(request):
         #MDOS (Model Denial of Service entrypoint)
         flash('Something went wrong, please try again', 'success')
