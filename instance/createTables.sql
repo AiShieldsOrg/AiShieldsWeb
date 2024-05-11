@@ -21,6 +21,31 @@ CREATE TABLE users (
     updated_date DATETIME NOT NULL DEFAULT(datetime())
 );
 
+CREATE_TABLE requests(
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    url varchar,
+    request_type varchar,
+    Headers varchar,
+    Body varchar,
+    client_id BIGINT,
+    create_date DATETIME NOT NULL DEFAULT(datetime()) 
+    FOREIGN KEY (client_id) REFERENCES clients(id),   
+)
+insert into requests(id,url,request_type,Headers,Body,client_id)
+values(1,'https://dev.aishields.org','GET','accept: text/json',Null,1);
+
+CREATE_TABLE clients(
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    IPaddress Varchar,
+    MacAddress Varchar,
+    create_date DATETIME NOT NULL DEFAULT(datetime()),
+    request_id,
+    FOREIGN KEY (request_id) REFERENCES requests(id),   
+)
+insert into requests(id,IPaddress,MacAddress,request_id);
+values(1,'https://dev.aishields.org','GET','accept: text/json',Null,1)
+
+
 CREATE TABLE cred (
     id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     user_id BIGINT,
@@ -191,4 +216,5 @@ VALUES (1,'OpenAI', 'ChatGPT','https://api.openai.com/v1/chat/completions','gpt-
 (7,'Perplexity', 'Perplexity.ai: sonar-medium-online','https://api.perplexity.ai/chat/completions','sonar-medium-online'),
 (8,'Perplexity', 'Perplexity.ai: sonar-small-online','https://api.perplexity.ai/chat/completions','sonar-small-online'),
 (9,'Perplexity', 'Perplexity.ai: sonar-medium-chat','https://api.perplexity.ai/chat/completions','sonar-medium-chat'),
-(10,'Perplexity', 'Perplexity.ai: sonar-small-chat','https://api.perplexity.ai/chat/completions','sonar-small-chat');
+(10,'Perplexity', 'Perplexity.ai: sonar-small-chat','https://api.perplexity.ai/chat/completions','sonar-small-chat'),
+(11,'aiShields', 'aiShields: CleanGPT','https://api.aishields.org/api/chat/completions','aiShields-CleanGPT');
