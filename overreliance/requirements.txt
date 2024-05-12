@@ -1,0 +1,7 @@
+beautifulsoup4==4.12.3
+matplotlib==3.8.4
+numpy==1.26.4
+pyppeteer==2.0.0
+rake_nltk==1.0.6
+Requests==2.31.0
+scikit_learn==1.4.2
