@@ -143,6 +143,7 @@ CREATE TABLE postprocResponse (
     rawResponseID BIGINT,
     rawOutputResponse VARCHAR,
     InsecureOutputHandlingReport VARCHAR,
+    OverellianceOutput VARCHAR,
     postProcOutputResponse VARCHAR,
     created_date DATETIME NOT NULL DEFAULT(datetime()),
     FOREIGN KEY (user_id) REFERENCES users(id),
