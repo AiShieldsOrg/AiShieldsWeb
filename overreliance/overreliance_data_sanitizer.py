@@ -192,11 +192,15 @@ class OverrelianceDataSanitizer():
         links = []
         data_summary_list = []
         
+        #--- THIS IS WHY IT MUST BE ITERATED LATER ---
+        keyphrase = keyphrase_data_list[0]["keyphrase"]
+        
         #extract links and text. ITERATE THIS LATER!!!
         for entry in keyphrase_data_list[0]["links"]:
             if entry["text"] != None and entry["link"] not in links:
                 docs.append(entry["text"].strip("\n"))
                 links.append(entry["link"])
+                
                 
         for document, link in zip(docs,links):
         
@@ -215,6 +219,7 @@ class OverrelianceDataSanitizer():
             data_summary['link'] = link
             data_summary['text'] = document
             data_summary['score'] = cosine_sim
+            data_summary['keyphrase'] = keyphrase
             
             data_summary_list.append(data_summary)
         

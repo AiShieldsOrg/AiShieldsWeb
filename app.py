@@ -14,6 +14,8 @@ import uuid
 from sensitive_data_sanitizer import SensitiveDataSanitizer
 from aishieldsemail import send_secure_email
 import secrets
+from overreliance.overreliance_data_sanitizer import OverrelianceDataSanitizer as ods
+import json
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = str(decStandard('OY/PyvGbiR1wZE+cbnnQt9xQ966z2GflY0E7nykRhfGh4CzfMThApARnADUuRG6qRK0apXfOHBD+GR5/cENiAAzrKhr4JBYexQaSTRTpvpH0PjG51O/L3okyW5GgNDXtPRUkruNJPtrmIjqnk9fy5LI/agzGN7nULnC1VUJosnmRXl57g6+TX8VBU2Q2HT8D5GXenELrN65QNka09tNBIblj+qKuWE9LEnkt1I+n0iTvjsoDi8i5szhVNsWy+WYcwRM7cFJq70ExUK61sr90hbitpWsgvgZjzTBI9xQwNKSMAG2HnJvCM/khkiqZEXZEObaq7kYtph0aR3BK6ANdT5ToW7w/Ct/qmZU74pr/rivvvbWbtgGv3gzLcvdhRS5nntezTWUda568iF18JhVrCyoZIwpvMbTWrF9baXGBCzEhyFLl4VAh8Gw36/1PFaqJCKMlCdQLUntQjqHkX/Kc+vIo58TlvC/rGIWYd2tPf8TDi/vuSeB3hPAkdTRv3eN+YTGC855AL2Nuu/N1i70IF6yGQ4lLSTSWGHEyx/z2nqkqhIkbF7W+4TXQaAXbJOaXOZgz6HiaUmM6eBQpiveKnGBT88IKmknPGgIzPr94iib0x2cgSwwmHXDzxADJJ3/UUYVg6m2/hF3/9Igjyt8N2dxJV/y2V8iPV7UONN1Nzy0='))
@@ -586,6 +588,11 @@ def chat():
             strApi = lstApi[0]
             strModel = lstApi[1]
             rawInput = InputPrompt(internalPromptID=internalID,user_id=userid,username=username,email=email,api=api,inputPrompt=inputprompt)
+            
+            
+            
+            
+            
             db.session.add(rawInput)
             db.session.commit()
             db.session.flush(objects=[rawInput])
@@ -616,6 +623,20 @@ def chat():
                     PromptInjectionReport = "",
                     OverrelianceReport = ""
                     )
+                
+                #=== OVERRELIANCE ALGORITHM ===
+                
+                SITE_IGNORE_LIST = ["youtube.com"]
+                NUMBER_OF_SEARCHES = 4
+                NUMBER_OF_LINKS = 4
+                STOPWORD_LIST = ["*", "$"]
+
+                overreliance_keyphrase_data_list = ods.get_keyphrases_and_links(preprocessedPrompt.preProcInputPrompt,NUMBER_OF_SEARCHES,link_number_limit=NUMBER_OF_LINKS, stopword_list=STOPWORD_LIST)
+                
+                overreliance_keyphrase_data_list = ods.get_articles(overreliance_keyphrase_data_list,site_ignore_list=SITE_IGNORE_LIST)
+                
+                #=== ===
+                
                 db.session.add(preprocessedPrompt)
                 db.session.commit()
                 db.session.flush(objects=[preprocessedPrompt])
@@ -642,6 +663,10 @@ def chat():
                     externalPromptID="",
                     username=username,
                     )
+                
+                
+                
+                
                 db.session.add(rawOutput)
                 db.session.commit()
                 db.session.flush(objects=[rawOutput])
@@ -670,6 +695,13 @@ def chat():
                     created_date = datetime.datetime.now(datetime.timezone.utc)
                 )
                 postProcPromptObj = aishields_postprocess_output(postProcPromptObj)
+                
+                #=== CHANGE TO .postProcOutputResponse LATER ===
+                
+                overreliance_data_summary_list = ods.compare(overreliance_keyphrase_data_list,postProcPromptObj.rawOutputResponse)
+                
+                #=== ===
+                
                 db.session.add(postProcPromptObj)
                 db.session.commit()
                 db.session.flush(objects=[postProcPromptObj])
@@ -697,8 +729,12 @@ def chat():
                     created_date = datetime.datetime.now(datetime.timezone.utc),
                     postProcResponse_id = postProcRespObj().id,
                     SensitiveDataSanitizerReport = preProcObj().SensitiveDataSanitizerReport,
-                    PromptInjectionReport = preProcObj().PromptInjectionReport,    
-                    OverrelianceReport = preProcObj().OverrelianceReport,
+                    PromptInjectionReport = preProcObj().PromptInjectionReport,   
+                    
+                    #=== CURRENTLY ONLY HAS ONE KEYPHRASE ===
+                    OverrelianceReport = json.dumps(overreliance_data_summary_list[0]),
+                    
+                    
                     InsecureOutputReportHandling = postProcRespObj().InsecureOutputHandlingReport,     
                     updated_date = datetime.datetime.now(datetime.timezone.utc)
                 )

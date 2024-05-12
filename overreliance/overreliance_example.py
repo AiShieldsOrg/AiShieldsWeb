@@ -36,6 +36,8 @@ keyphrase_data_list = ods.get_articles(keyphrase_data_list,site_ignore_list=SITE
 
 data_summary_list = ods.compare(keyphrase_data_list,output_text)
 
+
+
 #=== this is just for plotting
 y = [data['link'] for data in data_summary_list]
 x = [data['score'] for data in data_summary_list]
