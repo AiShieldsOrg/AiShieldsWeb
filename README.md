@@ -36,6 +36,11 @@ chmod +x  helpers/Patrick-5e39e57f-0550-49f3-8db6-d33cd139168f.pem
 ```python
 strPEMfileName = './helpers/Patrick-5e39e57f-0550-49f3-8db6-d33cd139168f.pem'
 ```
+   then in `app.py` replace the values in lines 21 thru 27 with the values here:
+   https://discordapp.com/channels/1229942715450523658/1230004837845045369/1239304937893138492
+   and then in line 46 of `app.py`:
+   https://discordapp.com/channels/1229942715450523658/1230004837845045369/1239305103882588304
+   
 5. Set the database password in your local copy 
 On or around line 6 of app.py
 `app.config['SECRET_KEY'] = `

@@ -8,8 +8,9 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import DateTime,Column, ForeignKey, BigInteger,NVARCHAR,Integer, Table, desc
 from sqlalchemy.orm import relationship, backref
 from sqlalchemy.ext.declarative import declarative_base
-from self_protection import protect,sanitize_input,getHash,encStandard,decStandard  
+from self_protection import protect,sanitize_input,getHash,encStandard,decStandard  # Import your self-protection logic
 import openai
+import anthropic
 import uuid
 from sensitive_data_sanitizer import SensitiveDataSanitizer
 from aishieldsemail import send_secure_email
@@ -18,13 +19,13 @@ from overreliance.overreliance_data_sanitizer import OverrelianceDataSanitizer a
 import json
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = str(decStandard('OY/PyvGbiR1wZE+cbnnQt9xQ966z2GflY0E7nykRhfGh4CzfMThApARnADUuRG6qRK0apXfOHBD+GR5/cENiAAzrKhr4JBYexQaSTRTpvpH0PjG51O/L3okyW5GgNDXtPRUkruNJPtrmIjqnk9fy5LI/agzGN7nULnC1VUJosnmRXl57g6+TX8VBU2Q2HT8D5GXenELrN65QNka09tNBIblj+qKuWE9LEnkt1I+n0iTvjsoDi8i5szhVNsWy+WYcwRM7cFJq70ExUK61sr90hbitpWsgvgZjzTBI9xQwNKSMAG2HnJvCM/khkiqZEXZEObaq7kYtph0aR3BK6ANdT5ToW7w/Ct/qmZU74pr/rivvvbWbtgGv3gzLcvdhRS5nntezTWUda568iF18JhVrCyoZIwpvMbTWrF9baXGBCzEhyFLl4VAh8Gw36/1PFaqJCKMlCdQLUntQjqHkX/Kc+vIo58TlvC/rGIWYd2tPf8TDi/vuSeB3hPAkdTRv3eN+YTGC855AL2Nuu/N1i70IF6yGQ4lLSTSWGHEyx/z2nqkqhIkbF7W+4TXQaAXbJOaXOZgz6HiaUmM6eBQpiveKnGBT88IKmknPGgIzPr94iib0x2cgSwwmHXDzxADJJ3/UUYVg6m2/hF3/9Igjyt8N2dxJV/y2V8iPV7UONN1Nzy0='))
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////Users\\crossfire234\\Desktop\\WorkStuff\\BCAMP\\AiShields\\AiShieldsWeb\\AiShieldsWeb\\instance\\aiShieldsDB3.db'
-email_from = "o0FXog44BPM62bHG96j9Ot9naWeswZibyGTt3x7eb1Oxtf4Wg3aaacJwEfbqZH7X2VbKqvcDv636sheQwlfMGx0ES23dm+Ea4ld4W6DcfP7rTj2RF8pAsqX5gGqakRebDF64nX/mcahSRhlA71JlVd6Bf9moq1f3OdvDeL5yebgnYVHTo9Ojn+s5uSk514chxV8pGgl92eHouVGFj9dh0111lAS9q7iTWOJq108owjQPMZzPD/AftdQFhorzGDqqQ62JMqlFVkZy4XCd9ui/sSr7CzdAaRZv+sAuF2dYX5EK8C537vCd7MjC1AB+o0UdnNcavIB/Kjv+7UdYw42pX1Rpe9fwBWDSDNpgitVkIYBRQjdgiois9XOYl2fhot3Y1l3XeWByFUplyTgoEAqv/mcWqIflsZIuOGQqmymEi0DHsRrW1ygkdUkyZJKma2J3O/TwxaKNqeGAW2dEeu06CS0cNNfyVzpJnRe6LeUOA2Ea5V5KGTR3gB1KqovGAcODpyrgg+dahjzGWFJVSAn6xpIxQggb5jKSwkgEaeE90dYa3eMx7wXpwCAGfZG3N8b/TeTCoNMrNEnmqITzEr67v5eja4cVUzDFz58x3gWb0Dc+3rIHvzdNfAbkCukcJmdJwiQjE17MAVofMECohKh41A7cuxXl6gDKDftmHio28bI="
-smtpserver = "JUMDLB4OB2LGkiIfOH0fg+Icvt7oL3K9yrv/IL4jGeEFAuQsF3Beg5ccK+pL9dpHN+onlcCFjVYk2YDoJmfKpDulCo5W1I2Gq9QWF5jdBTcsMiUFciLnTGcBop0WNdV5mpWb/A5dw5319iRoXlC377nPCnJZFoy5B1DooQvkg4J+EZiF9CboDd84V6Av1uxm1iKUondXdq32q7b6kLFhtV2eZKlsbLb6QpIhhnfkPGt35Ob6xNyK4R4PX6NgjjjvuepEL4RV0g4QuR+jgDeuE4aLONiwv9ygtoa0cTq4aob8AoGNIJld5Q9vun5y7x7Tnp3drn9hvy1Mi2cs6wjQpNkPleYpemhTPeJrFM1OAOeTCfetEnn9tFiqdkBt+uW+V6mtXDVTVT/I1Xwuvl0db05tsFq8tXHqp+/QOtaZmqLincGXT1p/grLeFVDvYZdPPfz0czXDPiewKFX3DqmAgYG4DEazimVrpqsbbP4RHYYI4MCiXncypwgTEfLdP4i8ZvWcd/A27BiSW6fyv4fMjO0kCViJBlZ9Pj1QxfvqEwMPo7y/lJBwKIjspT50DF+U2iwDrNDzi2e7t/dsiQ9tTQ4y8DVwhyY8wE5dKQ2wqWRcpHU6ipMyxKq5Fs2WnVldZcn3g5buMrPRSMiJVY0DmnrPDmqUHRyvQzxlEg+uUKg="
-smtpport = "WymM5C7FEi8IfMVTxBxV+JoJbnLApXfS1iHCnannQw9vHA9F33Z9E3p9YMjl7+rK9gAEZGgnLpUgSikhpBzDWDV4/sIBNUl0iuZq79Wk+2cPEROIq3ZZNJlwNbsvJoFvJ2T6laws5ObaleaGeN6LjaSURTFytRntT7NuunNylRvjFGHEMMYW/ONgx92XL0pr8XrPyNeaaEvWbR5ftENvjy27ZVRj+M1hl8y17H/pkXLzc/MQQCwBN0D2iMlHch3pVzxnwlgEAAlWMNf/euK9PPeg9NJuQG3bic3QLIOrlHkMvefdwPK1lkbIZJCjcoYFWuOoE5P/UPEWMpAox2EtbwgPNfVackbnOlpZv5hXfg0dtyDoefPBJevTBeIWUk+cyhvGmJ68flz1f+VL/ug4fy5bHfCcZ7v0ouLuB7g99MIr0gwt4lQA/esyybtImTRZMvC/RkYsoKiyNb1Bgp9qDGjLJYpolYUSR/ZO48whF90GoPrN8un4X9lyw0ffWtJUNkDlIK4j8UDbjVu0pE3QABYPFfEk+qGyzQdWgVe3mwcBEPkF5PohYjeSss162w5hXan8DE3+Lg22LS53WBfwp29qpe0nC/lrR/emianhTNT2u1cKP4zvf4bDjix4opZvu4xs3fO4xn62rkOImZiT3lUR1wx0pxfUd2C5f0NL9G4="
-smtpp = "ZaWCMeTE17PO90tootuP0oOPJALMUPvk8zDdgaPn/sVP5Ge8JRIDxNgZBNlle7hfm0sdJrtTrLgcp6pN7Kkdm/GdUdj3eoCq2+omm74912GO/xwkLzY7cd6CUVPFNmE+1NR4TuJbk86Oz47DVhTbMwK+o2i6yCDZYe4BVUoIt7Tzne0zHcvaVxtkYP5WEfeq0fgLrCnemK5aQrHU5FlNNcHSrx4uvdXueoyIoL3F/GPUMloeSIYP6TlUQhGE1URADtkmegTwpLOus70LUbmbLRmXLtfw2s9QkZ1jovGfq8JCMFbUmjoLix1yxQhnaubs7vW72JoGNpQ6iQ490ucdW4bI4YsAFdIgmjLOTS7ip6K1uzVNadEIyLmAQgGZkfw4rdv/wP75hNxeVvqxHco4YKUIVMJQeujKDSXpM+q2bdt/mvTSqU0HF16Ktqb85pifvdrl+5KoukzkyO+3376Oe8s5qkXhWixqhCkXEA4NmWHSxRGtbkQsn/V4g0lWvUoKW7NKaPrbhPHtkTJ9PiCoLaQZTMb2TjHNxwRGFMotNCIR4AukgttDEQ2GTmBIHX7Ohk5Vl7f4urOjj3Hd69mdslLlsh6QavWu0MoZe5HG/rAUpWcDP6TmAccwEZXC1xTR3+044HjWQ4/eT2JJyt0keMCmmGe3wufKyKMNKoeFBLk="
-smtpu = "o0FXog44BPM62bHG96j9Ot9naWeswZibyGTt3x7eb1Oxtf4Wg3aaacJwEfbqZH7X2VbKqvcDv636sheQwlfMGx0ES23dm+Ea4ld4W6DcfP7rTj2RF8pAsqX5gGqakRebDF64nX/mcahSRhlA71JlVd6Bf9moq1f3OdvDeL5yebgnYVHTo9Ojn+s5uSk514chxV8pGgl92eHouVGFj9dh0111lAS9q7iTWOJq108owjQPMZzPD/AftdQFhorzGDqqQ62JMqlFVkZy4XCd9ui/sSr7CzdAaRZv+sAuF2dYX5EK8C537vCd7MjC1AB+o0UdnNcavIB/Kjv+7UdYw42pX1Rpe9fwBWDSDNpgitVkIYBRQjdgiois9XOYl2fhot3Y1l3XeWByFUplyTgoEAqv/mcWqIflsZIuOGQqmymEi0DHsRrW1ygkdUkyZJKma2J3O/TwxaKNqeGAW2dEeu06CS0cNNfyVzpJnRe6LeUOA2Ea5V5KGTR3gB1KqovGAcODpyrgg+dahjzGWFJVSAn6xpIxQggb5jKSwkgEaeE90dYa3eMx7wXpwCAGfZG3N8b/TeTCoNMrNEnmqITzEr67v5eja4cVUzDFz58x3gWb0Dc+3rIHvzdNfAbkCukcJmdJwiQjE17MAVofMECohKh41A7cuxXl6gDKDftmHio28bI="
+app.config['SECRET_KEY'] = str(decStandard(''))
+app.config['SQLALCHEMY_DATABASE_URI'] = ''
+email_from = ""
+smtpserver = ""
+smtpport = ""
+smtpp = ""
+smtpu = ""
 smtp_server = str(decStandard(smtpserver))
 smtp_port = str(decStandard(smtpport))
 smtp_p = str(decStandard(smtpp))
@@ -36,12 +37,14 @@ apis = [{"APIowner":"OpenAI","TextGen": {"Name":"ChatGPT","Models":[
                 {"Name":"GPT 3.5 Turbo","details":{"uri":"https://api.openai.com/v1/chat/completions","jsonv": "gpt-3.5-turbo"}}
                 ]}},
                 {"APIowner":"Anthropic","TextGen": {"Name":"Claude","Models":[
-                {"Name":"Claude - most recent","details":{"uri": "https://api.anthropic.com/v1/messages","jsonv":"anthropic-version: 2023-06-01"}}
+                {"Name":"Claude Opus - most recent","details":{"uri": "https://api.anthropic.com/v1/messages","jsonv":"claude-3-opus-20240229"}},
+                {"Name":"Claude Sonnet - most recent","details":{"uri": "https://api.anthropic.com/v1/messages","jsonv":"claude-3-sonnet-20240229"}},
+                {"Name":"Claude Haiku - most recent","details":{"uri": "https://api.anthropic.com/v1/messages","jsonv":"claude-3-haiku-20240307"}} 
                  ]}}]
 
 def app_context():
     app = Flask(__name__)
-    strAppKey = ''
+    strAppKey = decStandard('')
     app.secret_key = strAppKey.encode(str="utf-8")
     csrf = CSRFProtect(app)
     with app.app_context():
@@ -83,34 +86,6 @@ user_api_cred = Table(
     db.Column("created_date",DateTime)
 )
 
-requests_client = Table(
- "requests_client",
-    db.metadata,
-    db.Column("request_id", BigInteger,ForeignKey("requests.id")),
-    db.Column("client_id", BigInteger, ForeignKey("clients.id")),
-   
-)
-
-class ClientRequests(db.Model):
-    __tablename__ = "requests"
-    id = db.Column(BigInteger, primary_key=True)
-    client_id = db.Column(BigInteger,ForeignKey("clients.id"))
-    URL = db.Column(NVARCHAR)
-    Headers = db.Column(NVARCHAR)
-    request_type = db.Column(NVARCHAR)
-    Body = db.Column(NVARCHAR)
-    created_date = db.Column(DateTime,unique=False, default=datetime.datetime.now(datetime.timezone.utc))
-    clients = relationship("Clients", back_populates="requests_clients")
-
-class Clients(db.Model):
-    __tablename__ = "clients"
-    id = db.Column(BigInteger, primary_key=True)
-    requests_id = db.Column(BigInteger,ForeignKey("requests.id"))
-    IPaddress = db.Column(NVARCHAR)
-    MacAddress = db.Column(NVARCHAR)
-    created_date = db.Column(DateTime,unique=False, default=datetime.datetime.now(datetime.timezone.utc))
-    requests = relationship("ClientRequests", back_populates="requests_clients")
-
 class User(db.Model):
     __tablename__ = "users"
     id = db.Column(BigInteger, primary_key=True)
@@ -142,7 +117,6 @@ class UserCode(db.Model):
     code = db.Column(NVARCHAR)
     created_date = db.Column(DateTime,unique=False, default=datetime.datetime.now(datetime.timezone.utc))
     users = relationship("User", back_populates="user_codes")
-
 class Credential(db.Model):
     __tablename__ = "cred"
     id = db.Column(BigInteger, primary_key=True)
@@ -271,31 +245,43 @@ class AiShieldsReport(db.Model):
     
 @app.before_request
 def before_request():
-    #Save the request data for MDOS protection
-    requestObj = ClientRequests()
-    requestObj.URL = request.full_path
-    requestObj.Headers = json.dumps(request.headers)
-    requestObj.Body = json.dumps(request.form.to_dict)
-    requestObj.request_type = request.method
-    db.add(requestObj)
-    db.commit()
-    db.flush()
-    #MDOS (Model Denial of Service entrypoint)
-    #James Yu can add code here to handle MDOS protection
+    # Use your self-protection logic here
     if not protect(request):
-        #MDOS (Model Denial of Service entrypoint)
-        flash('Something went wrong, please try again', 'success')
-        abort(400)
+       flash('Something went wrong, please try again', 'success')
+       abort(400)
     
 @app.route("/",methods=['GET','POST'])
-def home():
-    return redirect(url_for('index'))
+def default():
+    try: 
+     if request.method == 'GET':
+            return render_template('index.html')
+     if request.method == 'POST':
+            #,
+                #{"model": "GPT 3.5 Turbo Instruct", "uri": "https://api.anthropic.com/v1/messages","jsonv":"gpt-3.5-turbo-instruct"},
+                #{"model": "Babbage 2", "uri": "https://api.anthropic.com/v1/messages","jsonv":"babbage-002" },
+                #{"model": "DaVinci 2","uri":"https://api.anthropic.com/v1/messages","jsonv": "davinci-002"},
+            email = (
+                db.session.query(User)
+                .filter(User.email == str(request.form.get('email')).lower(),User.user_verified==1).order_by(desc(User.id))
+                .first()
+            )
+            if email is None:
+                flash("Please create an account")
+                return render_template('newaccount.html',apis=apis, email=request.form.get("email"))
+            else:
+                # user = User(username="", email=str(request.form["email"]).lower(),user_verified=0,created_date=datetime.datetime.now(datetime.timezone.utc))
+                # db.session.add(user)
+                # db.session.commit()
+                return render_template('login.html',apis=apis, email=request.form.get("email"))
+    except Exception as err:
+        print('An error occured: ' + str(err))  
+        return render_template('index.html',apis=apis, email=request.form.get("email"))
 
 @app.route("/index",methods=['GET','POST'])
 def index():
     try:
         if request.method == 'GET':
-            return render_template('index.html',apis=apis, email=request.form.get("email"))
+            return render_template('index.html')
         if request.method == 'POST':
             #,
                 #{"model": "GPT 3.5 Turbo Instruct", "uri": "https://api.anthropic.com/v1/messages","jsonv":"gpt-3.5-turbo-instruct"},
@@ -322,6 +308,15 @@ def index():
 def newaccount():
     try:
         if request.method == 'GET':
+            # email = (
+            #     db.session.query(User)
+            #     .filter(User.email == str(request.form["email"]).lower(),User.user_verified == 1)
+            #     .one_or_none()
+            # )
+            # if email is not None:
+            #     flash("Email is already registered, please login")
+            #     return render_template('login.html',email=email.email)
+            # else:
             return render_template('newaccount.html')
         if request.method == 'POST':
             email = (
@@ -511,7 +506,7 @@ def forgot():
                     s_port = smtp_port
                     s_p = smtp_p
                     m_subj = "Please reset your email for AiShields.org"
-                    m_message = "Dear " + user.first_name + ", \n\n Please click this link: <a href='http://127.0.0.1:5000/reset?code=" + strCode +"' or paste it into your browser address bar to change your password. \n\nThis link will expire in 20 minutes. \n\n Thank you, \n\n Support@AiShields.org"
+                    m_message = "Dear " + user.first_name + ", \n\n Please click this link: <a href='https://dev.aishields.org/reset?code=" + strCode +"' or paste it into your browser address bar to change your password. \n\nThis link will expire in 20 minutes. \n\n Thank you, \n\n Support@AiShields.org"
                     send_secure_email(to_email,from_email,s_server,s_port,from_email,s_p,m_subj,m_message)
                     return render_template('login.html')
             else:
@@ -641,16 +636,35 @@ def chat():
                 db.session.commit()
                 db.session.flush(objects=[preprocessedPrompt])
                 strTempApiKey = str(decStandard(str(strEncToken)))
-                client = openai.Client(api_key=str(strTempApiKey))
-                stream = client.chat.completions.create(
-                    model=strModel,
-                    messages=[{"role": strRole.lower(), "content": inputprompt}],
-                    stream=True,
-                )
                 strRawOutput = ""
-                for chunk in stream:
-                    if chunk.choices[0].delta.content is not None:
-                        strRawOutput += chunk.choices[0].delta.content
+                if strApi == "OpenAI":
+                    client = openai.Client(api_key=str(strTempApiKey))
+                    stream = client.chat.completions.create(
+                        model=strModel,
+                        messages=[{"role": strRole.lower(), "content": inputprompt}],
+                        stream=True,
+                    )
+                    
+                    for chunk in stream:
+                        if chunk.choices[0].delta.content is not None:
+                            strRawOutput += chunk.choices[0].delta.content
+                elif strApi == "Anthropic":
+                    client = anthropic.Anthropic(
+                        # defaults to os.environ.get("ANTHROPIC_API_KEY")
+                        api_key=strTempApiKey,
+                    )
+
+                    message = client.messages.create(
+                        model="claude-3-opus-20240229",
+                        max_tokens=1000,
+                        temperature=0.0,
+                        messages=[
+                            {"role": strRole, "content": inputprompt}
+                        ]
+                    )
+                    for m in message.content:   
+                        if m.type == "text":
+                            strRawOutput += m.text
                 rawOutput = ApiResponse(
                     internalPromptID=internalID,
                     user_id=userid,
@@ -757,10 +771,11 @@ def aishields_sanitize_input(input:InputPrompt):
     try:
         strPreProcInput = ""
         strRawInputPrompt = input.inputPrompt
-        sanitizedInput = sanitize_input(strRawInputPrompt)
-        #sds = SensitiveDataSanitizer()
-        #strSensitiveDataSanitized = sds.sanitize_input(input_content=strRawInputPrompt)           
-        strPreProcInput += str(sanitizedInput)
+
+        #sanitizedInput = #sanitize_input(strRawInputPrompt)
+        sds = SensitiveDataSanitizer()
+        strSensitiveDataSanitized = sds.sanitize_input(input_content=strRawInputPrompt)           
+        strPreProcInput += str(strSensitiveDataSanitized)
         #now sanitize for Prompt Injection
         #now assess for Overreliance
         return strPreProcInput

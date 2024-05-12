@@ -1,14 +1,3 @@
-CREATE TABLE user_codes (
-    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    user_id VARCHAR,
-    email VARCHAR,
-    code VARCHAR,
-    created_date DATETIME NOT NULL DEFAULT(datetime()),
-    FOREIGN KEY (user_id) REFERENCES users(id)
-);
-insert into user_codes(id,user_id,email,code)
-values(1,1,"patrick@gratitech.org","123456");
-
 CREATE TABLE users (
     id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     username VARCHAR,
@@ -21,30 +10,25 @@ CREATE TABLE users (
     updated_date DATETIME NOT NULL DEFAULT(datetime())
 );
 
-CREATE_TABLE requests(
+CREATE TABLE user_codes (
     id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    url varchar,
-    request_type varchar,
-    Headers varchar,
-    Body varchar,
-    client_id BIGINT,
-    create_date DATETIME NOT NULL DEFAULT(datetime()) 
-    FOREIGN KEY (client_id) REFERENCES clients(id),   
-)
-insert into requests(id,url,request_type,Headers,Body,client_id)
-values(1,'https://dev.aishields.org','GET','accept: text/json',Null,1);
+    user_id VARCHAR,
+    email VARCHAR,
+    code VARCHAR,
+    created_date DATETIME NOT NULL DEFAULT(datetime()),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+insert into user_codes(id,user_id,email,code)
+values(1,1,"patrick@gratitech.org","123456");
 
-CREATE_TABLE clients(
-    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    IPaddress Varchar,
-    MacAddress Varchar,
-    create_date DATETIME NOT NULL DEFAULT(datetime()),
-    request_id,
-    FOREIGN KEY (request_id) REFERENCES requests(id),   
-)
-insert into requests(id,IPaddress,MacAddress,request_id);
-values(1,'https://dev.aishields.org','GET','accept: text/json',Null,1)
-
+CREATE TABLE request_logs (
+    id SERIAL PRIMARY KEY,
+    client_id INTEGER NOT NULL,
+    request_type VARCHAR,
+    headers TEXT,
+    body TEXT,
+    create_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
 CREATE TABLE cred (
     id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
@@ -63,7 +47,6 @@ CREATE TABLE cred (
 );
 insert into cred(id,api_id,username,user_id,email,token,jwt,header,formfield)
 values(1,1,'Patrick Kelly',1,"patrick@gratitech.org","UFO19/34gQDiTUagB+qMVEtcuMhMrrmuwb5Zv+lQwIQRA0euVnAjR82wAhFR/Jhu7AzPz7ugf90v4W0KRdwB0oO40+ZAnyiRLwLMMtUy1Ripbsu4BoHjC7DUHcEik+TfTWusm3NdVJNrRR2gPNxLBy2do3iWKvQlnk5XbD7mf5gg8MjytkLNOYK2/Ziyi2sk7omRjKJfPZCMvYmrS2CCeah/gP67JA8oIxJmEmN6fntraziZ1k1UDZb2emHRjSEzZySV8KiozdeukjC5GZ8RDBq41xvNP8tf2Oje9cKa6VYFWbjDOrv3/yJ5HdW7/Le0GuAqVAMhqQsiG+8MstOzPemr56ZHI7j6vw0coc6RW1BGnV5UiSKOFqaNDUy0EidG+Ot4hI81Y0eslRN4TUhLl6/P45+lkTRhahov3DHyqd/W1cPtUVxlv0HpdYJQquoVK9AaWL0u3RfhBz363IN6mrEsELaPz4vZCCMQFY5IlfmnBdct+jttufz+jlRT4NjeiwTyQVd2Dc4JYt0pUovTYEIXNjtLOrTefHy5QmTXK5rsdxHEChAhB1cc1zKbUX113GI32ensEWL8/nfO0ntk3mjI7le5EPmFBJp8uGm9EgrtzVM0by2OI776hkoQRTR3MqV2oyjT/XtrRj7fk960/OJ9eUArZmQYidnW2i/EP2w=","None","None","None");
-
 
 
 CREATE TABLE GenApi (
@@ -160,6 +143,7 @@ CREATE TABLE postprocResponse (
     rawResponseID BIGINT,
     rawOutputResponse VARCHAR,
     InsecureOutputHandlingReport VARCHAR,
+    OverellianceOutput VARCHAR,
     postProcOutputResponse VARCHAR,
     created_date DATETIME NOT NULL DEFAULT(datetime()),
     FOREIGN KEY (user_id) REFERENCES users(id),
