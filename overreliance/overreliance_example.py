@@ -73,4 +73,7 @@ ax.set_title("Cosine similarity of " + stripped_path, pad = 20).set_size(20)
 ax.set_xlabel('Similarity score', labelpad = 10, fontsize = 12)
 ax.set_ylabel('Link name', labelpad = 10, fontsize = 12, loc="bottom")
 
+plt.savefig('overreliance_plot.png', dpi=300, bbox_inches='tight')
+
 plt.show()
+
