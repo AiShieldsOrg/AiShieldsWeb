@@ -20,13 +20,13 @@ import os
 
 current_path = os.getcwd()
         
-chrome_path = current_path + '\\Win_x64_1000027_chrome-win\\chrome-win\\chrome.exe'
+
 
 
 class OverrelianceDataSanitizer():
     def __init__(self):
         self.headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'}
-        
+        self.chrome_path  = "C:/Users/crossfire234/Desktop/Win_x64_1000027_chrome-win/chrome-win/chrome.exe"
     
     ''' get_keyphrases '''
     
@@ -96,7 +96,7 @@ class OverrelianceDataSanitizer():
     async def search_and_scrape(self, link, search):
         # Launch a new browser instance
         async with async_playwright() as p:
-            browser = await p.chromium.launch(executable_path=chrome_path)
+            browser = await p.chromium.launch(executable_path=self.chrome_path)
             page = await browser.new_page()
 
             # Navigate to a website
