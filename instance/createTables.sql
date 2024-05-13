@@ -81,7 +81,7 @@ CREATE TABLE inputPrompt (
 insert into inputPrompt(id,user_id,cred_id,username,email,api_id,api,internalPromptID,inputPrompt)
 values(1,1,1,'Patrick Kelly','patrick@gratitech.org',1,'https://api.openai.com/v1/chat/completions','dace3b2a-9b5f-450b-97fb-813f80ddc50e','What are QR codes and who invented them?');
 
-
+DROP TABLE IF EXISTS preprocInputPrompt;
 CREATE TABLE preprocInputPrompt (
     id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     user_id VARCHAR,
@@ -94,6 +94,7 @@ CREATE TABLE preprocInputPrompt (
     inputPrompt VARCHAR,
     preProcInputPrompt VARCHAR,
     SensitiveDataSanitizerReport VARCHAR,
+    MDOSReport VARCHAR,
     PromptInjectionReport VARCHAR,
     OverrelianceReport VARCHAR,
     created_date DATETIME NOT NULL DEFAULT(datetime()),
@@ -102,8 +103,8 @@ CREATE TABLE preprocInputPrompt (
     FOREIGN KEY (api_id) REFERENCES GenApi(id),
     FOREIGN KEY (rawInputPrompt_id) REFERENCES inputPrompt(id)
 );
-insert into preprocInputPrompt(id,user_id,username,email,api_id,api,internalPromptID,rawInputPrompt_id,inputPrompt,preProcInputPrompt,SensitiveDataSanitizerReport,PromptInjectionReport,OverrelianceReport)
-values(1,1,'Patrick Kelly','patrick@gratitech.org',1,'https://api.openai.com/v1/chat/completions','dace3b2a-9b5f-450b-97fb-813f80ddc50e',1,'What are QR codes and who invented them?','What are QR codes and who invented them?','No sensitive data was found in the input prompt','Not Implemented Yet','Not Implemented Yet');
+insert into preprocInputPrompt(id,user_id,username,email,api_id,api,internalPromptID,rawInputPrompt_id,inputPrompt,preProcInputPrompt,SensitiveDataSanitizerReport,MDOSReport,PromptInjectionReport,OverrelianceReport)
+values(1,1,'Patrick Kelly','patrick@gratitech.org',1,'https://api.openai.com/v1/chat/completions','dace3b2a-9b5f-450b-97fb-813f80ddc50e',1,'What are QR codes and who invented them?','What are QR codes and who invented them?','No sensitive data was found in the input prompt','Not Implemented Yet','Not Implemented Yet','Not Implemented Yet');
 
 
 CREATE TABLE apiResponse (
@@ -169,6 +170,7 @@ CREATE TABLE aiShieldsReport (
     api_id BIGINT,
     api VARCHAR,
     SensitiveDataSanitizerReport VARCHAR,
+    MDOSReport VARCHAR,
     PromptInjectionReport VARCHAR,
     OverrelianceReport VARCHAR,
     InsecureOutputReportHandling VARCHAR,
@@ -181,7 +183,7 @@ CREATE TABLE aiShieldsReport (
     FOREIGN KEY (postProcResponse_id) REFERENCES postprocResponse(id)
 );
 
-insert into aiShieldsReport(id,rawInputPrompt_id,preProcPrompt_id,rawResponse_id,postProcResponse_id,internalPromptID,externalPromptID,user_id,username,email,api_id,api,SensitiveDataSanitizerReport,PromptInjectionReport,OverrelianceReport,InsecureOutputReportHandling)
+insert into aiShieldsReport(id,rawInputPrompt_id,preProcPrompt_id,rawResponse_id,postProcResponse_id,internalPromptID,externalPromptID,user_id,username,email,api_id,api,SensitiveDataSanitizerReport,MDOSReport,PromptInjectionReport,OverrelianceReport,InsecureOutputReportHandling)
 values(1,1,1,1,1,'dace3b2a-9b5f-450b-97fb-813f80ddc50e','dace3b2a-9b5f-450b-97fb-813f80ddc50e2',1,'Patrick Kelly','patrick@gratitech.org',1,'https://api.openai.com/v1/chat/completions','No Sensitive Data was found in the input','Not Implemented Yet','Not Implemented Yet','No insecure output was detected');
 
 
