@@ -56,55 +56,22 @@ class OverrelianceDataSanitizer():
                     text += self._extract_text(child,index)
         return text
     
-    def get_keyphrases(self,prompt_text, search_script_path, search_number_limit,link_number_limit = None, stopword_list =[]):
-    
-        rake = Rake()
-        
-        #get the unique list of phrases
-        rake.extract_keywords_from_text(prompt_text)
-        keyword_phrase = list(set(rake.get_ranked_phrases_with_scores()))
-        
-        #sort by the score (highest)
-        sorted_keyphrases = sorted(keyword_phrase, key= lambda x: x[0], reverse=True)
-        
-        keyphrase_data_list = []
-        
-        #it either the length of the number of keyphrases, or the desired search list. Because of the sorting, higher scored phrases are searched first
-        for pair in sorted_keyphrases[:min(len(sorted_keyphrases), search_number_limit)]:
-            
-            term = self._remove_special_chars(pair[1],stopword_list)
-            
-            print("performing search on keyword:",term)
-            result = subprocess.run(["node", "googlesearch2.js", term], cwd=search_script_path ,capture_output=True,text=True)
-            
-            #generating a list of links from the result of the script
-            link_list = result.stdout.split()
-            
-            #dictionary to be converted to JSON
-            data = dict()
-            data["score"] = pair[0]
-            data["keyphrase"] = term
-            if not link_number_limit:
-                data["links"] = link_list
-            else:
-                data["links"] = link_list[:link_number_limit]
-            
-            keyphrase_data_list.append(data)
-        
-        return keyphrase_data_list
-    
     async def search_and_scrape(self, link, search):
         # Launch a new browser instance
         async with async_playwright() as p:
-            browser = await p.chromium.launch(executable_path=self.chrome_path)
+            
+            
+            DELAY = 0
+            #executable_path=self.chrome_path. Seems like it's not needed (maybe because of my system)
+            browser = await p.chromium.launch()
             page = await browser.new_page()
 
             # Navigate to a website
             await page.goto(link)
 
             # Type the search query and press Enter
-            await page.type('textarea', search, delay=100)
-            await page.keyboard.press('Enter', delay=100)
+            await page.type('textarea', search, delay=DELAY)
+            await page.keyboard.press('Enter', delay=DELAY)
 
             # Wait for navigation
             await page.wait_for_load_state('networkidle')
@@ -112,7 +79,7 @@ class OverrelianceDataSanitizer():
             # Take a screenshot
             await page.screenshot(path='google1.png')
 
-            # Click an element on the page
+            # Click an element on the page. Perhaps link filtering should go here
             data = await page.evaluate('''() => {
                 const search = document.querySelectorAll('a');
                 const urls = Array.from(search).map(v => v.href);
@@ -162,6 +129,8 @@ class OverrelianceDataSanitizer():
             
             keyphrase_data_list.append(data)
         
+        ''' data = list({score: float, keyphrase: string, links: list(str)})'''
+        
         return keyphrase_data_list
     
     ''' get_articles '''
@@ -171,11 +140,13 @@ class OverrelianceDataSanitizer():
             print()
             print("Keyphrase:",data["keyphrase"])
             print()
+            
+            print(list(set(data["links"])))
             for j, link in enumerate(data["links"]):
-                print()
-                print(link)
-                print()
                 if all(ignored not in link for ignored in site_ignore_list):
+                    
+                    print(link)
+                    
                     try:
                         response = requests.get(link, headers=self.headers, timeout=timeout)
                         html_content = response.content
@@ -193,10 +164,12 @@ class OverrelianceDataSanitizer():
                 else:
                     keyphrase_data_list[i]["links"][j] = {"link": link, "text": None}
                     
+        ''' data = list({score: float, keyphrase: string, links: list({link: str, text: str or None})})'''
+                    
         return keyphrase_data_list
     
     ''' compare '''
-    def compare(self, keyphrase_data_list, response_text):
+    def compare(self, keyphrase_data_list, response_text, analysis="cosine_sim"):
         docs = []
         links = []
         data_summary_list = []
@@ -215,20 +188,35 @@ class OverrelianceDataSanitizer():
         
             data_summary = dict()
             
-            vectorizer = TfidfVectorizer()
-
-            # Fit and transform the documents to get the vector representations
-            X = vectorizer.fit_transform([response_text, document])
-
-            # Calculate the cosine similarity between the two document vectors
-            cosine_sim = (X[0] * X[1].T).toarray()[0,0] / (np.linalg.norm(X[0].toarray()) * np.linalg.norm(X[1].toarray()))
-
-            print(f"The cosine similarity between the text and {link} is: {cosine_sim:.2f}")
-            
-            data_summary['link'] = link
-            data_summary['text'] = document
-            data_summary['score'] = cosine_sim
             data_summary['keyphrase'] = keyphrase
+            data_summary['text'] = document
+            data_summary['link'] = link
+            
+            if analysis == "cosine_sim":
+            
+                vectorizer = TfidfVectorizer()
+
+                # Fit and transform the documents to get the vector representations
+                X = vectorizer.fit_transform([response_text, document])
+
+                # Calculate the cosine similarity between the two document vectors
+                cosine_sim = (X[0] * X[1].T).toarray()[0,0] / (np.linalg.norm(X[0].toarray()) * np.linalg.norm(X[1].toarray()))
+
+                print(f"The cosine similarity between the text and {link} is: {cosine_sim:.2f}")
+                
+                data_summary['score'] = cosine_sim
+                
+            if analysis == "intersection":
+                doc_set = set(document)
+                text_set = set(response_text)
+                
+                overlap_set = doc_set.intersection(text_set)
+                
+                overlap = len(overlap_set)/len(text_set)
+                
+                print(f"The percentage overlap between the text and {link} is: {overlap:.2f}")
+                data_summary['score'] = overlap
+                
             
             data_summary_list.append(data_summary)
         

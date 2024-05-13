@@ -623,7 +623,7 @@ def chat():
                 
                 SITE_IGNORE_LIST = ["youtube.com"]
                 NUMBER_OF_SEARCHES = 4
-                NUMBER_OF_LINKS = 4
+                NUMBER_OF_LINKS = 10
                 STOPWORD_LIST = ["*", "$"]
                 
                 ods = ODS()
