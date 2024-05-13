@@ -14,6 +14,7 @@ import uuid
 from sensitive_data_sanitizer import SensitiveDataSanitizer
 from aishieldsemail import send_secure_email
 import secrets
+from insecure_out_handling import InsecureOutputSanitizer
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = str(decStandard('OY/PyvGbiR1wZE+cbnnQt9xQ966z2GflY0E7nykRhfGh4CzfMThApARnADUuRG6qRK0apXfOHBD+GR5/cENiAAzrKhr4JBYexQaSTRTpvpH0PjG51O/L3okyW5GgNDXtPRUkruNJPtrmIjqnk9fy5LI/agzGN7nULnC1VUJosnmRXl57g6+TX8VBU2Q2HT8D5GXenELrN65QNka09tNBIblj+qKuWE9LEnkt1I+n0iTvjsoDi8i5szhVNsWy+WYcwRM7cFJq70ExUK61sr90hbitpWsgvgZjzTBI9xQwNKSMAG2HnJvCM/khkiqZEXZEObaq7kYtph0aR3BK6ANdT5ToW7w/Ct/qmZU74pr/rivvvbWbtgGv3gzLcvdhRS5nntezTWUda568iF18JhVrCyoZIwpvMbTWrF9baXGBCzEhyFLl4VAh8Gw36/1PFaqJCKMlCdQLUntQjqHkX/Kc+vIo58TlvC/rGIWYd2tPf8TDi/vuSeB3hPAkdTRv3eN+YTGC855AL2Nuu/N1i70IF6yGQ4lLSTSWGHEyx/z2nqkqhIkbF7W+4TXQaAXbJOaXOZgz6HiaUmM6eBQpiveKnGBT88IKmknPGgIzPr94iib0x2cgSwwmHXDzxADJJ3/UUYVg6m2/hF3/9Igjyt8N2dxJV/y2V8iPV7UONN1Nzy0='))
@@ -747,7 +748,10 @@ def aishields_sanitize_input(input:InputPrompt):
 def aishields_postprocess_output(postProcResponseObj:PostProcResponse):
     #insecure output handing
     try:
-        strPostProcessedOutput = sanitize_input(postProcResponseObj.rawOutputResponse)
+        #strPostProcessedOutput = sanitize_input(postProcResponseObj.rawOutputResponse)
+        output_sanitizer=InsecureOutputSanitizer()
+        strPostProcessedOutput, outputSanitizationReport = output_sanitizer.generate_json_report(postProcResponseObj.rawOutputResponse)
+        
         postProcResponseObj.postProcOutputResponse = escape(str(strPostProcessedOutput))
         postProcResponseObj.InsecureOutputHandlingReport = "AiShields Data Sanitizer removed the following from the raw output\n for your safety: \n" + str(escape(aishields_get_string_diff(postProcResponseObj.rawOutputResponse,strPostProcessedOutput)))
         #handle and sanitize raw output

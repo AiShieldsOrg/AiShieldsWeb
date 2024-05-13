@@ -108,6 +108,6 @@ class InsecureOutputSanitizer:
             'changes': comparison['changes'],
             'change_count': comparison['change_count']
         }
-        return json.dumps(report, indent=4)
+        return sanitized, json.dumps(report, indent=4)
 
 
