@@ -1,8 +1,12 @@
 from rake_nltk import Rake
+import nltk
 import subprocess
 
+
+nltk.download('punkt')
+
 import asyncio
-from pyppeteer import launch
+from playwright.async_api import async_playwright
 
 import requests
 from bs4 import BeautifulSoup
@@ -12,6 +16,11 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 
 import time
 
+import os
+
+current_path = os.getcwd()
+        
+chrome_path = current_path + '\\Win_x64_1000027_chrome-win\\chrome-win\\chrome.exe'
 
 
 class OverrelianceDataSanitizer():
@@ -84,38 +93,38 @@ class OverrelianceDataSanitizer():
         
         return keyphrase_data_list
     
-    async def search_and_scrape(self,link,search):
+    async def search_and_scrape(self, link, search):
         # Launch a new browser instance
-        
-        
-        browser = await launch(executablePath='C:\\Users\\crossfire234\\Desktop\\WorkStuff\\BCAMP\\AiShields\\Win_x64_1000027_chrome-win\\chrome-win\\chrome.exe')
-        
-        # Open a new page
-        page = await browser.newPage()
-        
-        # Navigate to a website
-        await page.goto(link)
-        
-        await page.type('textarea',search,{'delay':100})
-        
-        await page.keyboard.press('Enter', {'delay':100})
-        
-        await page.waitForNavigation()
-        
-        await page.screenshot({'path': 'google1.png', 'delay': 100})
-        
-        # Click an element on the page
-        data = await page.evaluate('''() => {
-        const search = document.querySelectorAll('a');
-        const urls = Array.from(search).map(v => v.href);
-        return urls;
-    }''')
-        
-        # Close the browser
-        await browser.close()
-        
-        filtered_data = [item for item in data if 'google' not in item and item != '']
-        return filtered_data
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(executable_path=chrome_path)
+            page = await browser.new_page()
+
+            # Navigate to a website
+            await page.goto(link)
+
+            # Type the search query and press Enter
+            await page.type('textarea', search, delay=100)
+            await page.keyboard.press('Enter', delay=100)
+
+            # Wait for navigation
+            await page.wait_for_load_state('networkidle')
+
+            # Take a screenshot
+            await page.screenshot(path='google1.png')
+
+            # Click an element on the page
+            data = await page.evaluate('''() => {
+                const search = document.querySelectorAll('a');
+                const urls = Array.from(search).map(v => v.href);
+                return urls;
+            }''')
+
+            # Close the browser
+            await browser.close()
+
+            # Filter the data
+            filtered_data = [item for item in data if 'google' not in item and item != '']
+            return filtered_data
     
     def get_keyphrases_and_links(self,prompt_text, search_number_limit,link_number_limit = None, stopword_list =[]):
         
