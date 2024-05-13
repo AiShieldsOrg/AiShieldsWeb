@@ -700,6 +700,11 @@ def chat():
                     created_date = datetime.datetime.now(datetime.timezone.utc)
                 )
                 postProcPromptObj = aishields_postprocess_output(postProcPromptObj)
+                
+                data_summary_list = ods.compare(overreliance_keyphrase_data_list,postProcPromptObj.rawOutputResponse)
+                
+                overreliance_string = f"score: {data_summary_list[0]['score']} of {data_summary_list[0]['link']}"
+                
                 db.session.add(postProcPromptObj)
                 db.session.commit()
                 db.session.flush(objects=[postProcPromptObj])
@@ -728,7 +733,7 @@ def chat():
                     postProcResponse_id = postProcRespObj().id,
                     SensitiveDataSanitizerReport = preProcObj().SensitiveDataSanitizerReport,
                     PromptInjectionReport = preProcObj().PromptInjectionReport,    
-                    OverrelianceReport = preProcObj().OverrelianceReport,
+                    OverrelianceReport = overreliance_string,
                     InsecureOutputReportHandling = postProcRespObj().InsecureOutputHandlingReport,     
                     updated_date = datetime.datetime.now(datetime.timezone.utc)
                 )
