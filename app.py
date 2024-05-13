@@ -13,18 +13,18 @@ import openai
 import uuid
 from sensitive_data_sanitizer import SensitiveDataSanitizer
 from prompt_injection_sanitizer import Prompt_Injection_Sanitizer
-from self_protection import getS3cr3txLocalE,getS3cr3txLocalD 
+from self_protection import * 
 from aishieldsemail import send_secure_email
 import secrets
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = ''
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////FullPath/To/aiShieldsDB3.db'
-email_from = ""
-smtpserver = ""
-smtpport = ""
-smtpp = ""
-smtpu = ""
+app.config['SECRET_KEY'] = str(decStandard('OY/PyvGbiR1wZE+cbnnQt9xQ966z2GflY0E7nykRhfGh4CzfMThApARnADUuRG6qRK0apXfOHBD+GR5/cENiAAzrKhr4JBYexQaSTRTpvpH0PjG51O/L3okyW5GgNDXtPRUkruNJPtrmIjqnk9fy5LI/agzGN7nULnC1VUJosnmRXl57g6+TX8VBU2Q2HT8D5GXenELrN65QNka09tNBIblj+qKuWE9LEnkt1I+n0iTvjsoDi8i5szhVNsWy+WYcwRM7cFJq70ExUK61sr90hbitpWsgvgZjzTBI9xQwNKSMAG2HnJvCM/khkiqZEXZEObaq7kYtph0aR3BK6ANdT5ToW7w/Ct/qmZU74pr/rivvvbWbtgGv3gzLcvdhRS5nntezTWUda568iF18JhVrCyoZIwpvMbTWrF9baXGBCzEhyFLl4VAh8Gw36/1PFaqJCKMlCdQLUntQjqHkX/Kc+vIo58TlvC/rGIWYd2tPf8TDi/vuSeB3hPAkdTRv3eN+YTGC855AL2Nuu/N1i70IF6yGQ4lLSTSWGHEyx/z2nqkqhIkbF7W+4TXQaAXbJOaXOZgz6HiaUmM6eBQpiveKnGBT88IKmknPGgIzPr94iib0x2cgSwwmHXDzxADJJ3/UUYVg6m2/hF3/9Igjyt8N2dxJV/y2V8iPV7UONN1Nzy0='))
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////Users/tylerlachney/Documents/homeProjects/BCAMP/aiShieldsLocal/AiShieldsWeb/instance/aiShieldsDB3.db'
+email_from = "o0FXog44BPM62bHG96j9Ot9naWeswZibyGTt3x7eb1Oxtf4Wg3aaacJwEfbqZH7X2VbKqvcDv636sheQwlfMGx0ES23dm+Ea4ld4W6DcfP7rTj2RF8pAsqX5gGqakRebDF64nX/mcahSRhlA71JlVd6Bf9moq1f3OdvDeL5yebgnYVHTo9Ojn+s5uSk514chxV8pGgl92eHouVGFj9dh0111lAS9q7iTWOJq108owjQPMZzPD/AftdQFhorzGDqqQ62JMqlFVkZy4XCd9ui/sSr7CzdAaRZv+sAuF2dYX5EK8C537vCd7MjC1AB+o0UdnNcavIB/Kjv+7UdYw42pX1Rpe9fwBWDSDNpgitVkIYBRQjdgiois9XOYl2fhot3Y1l3XeWByFUplyTgoEAqv/mcWqIflsZIuOGQqmymEi0DHsRrW1ygkdUkyZJKma2J3O/TwxaKNqeGAW2dEeu06CS0cNNfyVzpJnRe6LeUOA2Ea5V5KGTR3gB1KqovGAcODpyrgg+dahjzGWFJVSAn6xpIxQggb5jKSwkgEaeE90dYa3eMx7wXpwCAGfZG3N8b/TeTCoNMrNEnmqITzEr67v5eja4cVUzDFz58x3gWb0Dc+3rIHvzdNfAbkCukcJmdJwiQjE17MAVofMECohKh41A7cuxXl6gDKDftmHio28bI="
+smtpserver = "JUMDLB4OB2LGkiIfOH0fg+Icvt7oL3K9yrv/IL4jGeEFAuQsF3Beg5ccK+pL9dpHN+onlcCFjVYk2YDoJmfKpDulCo5W1I2Gq9QWF5jdBTcsMiUFciLnTGcBop0WNdV5mpWb/A5dw5319iRoXlC377nPCnJZFoy5B1DooQvkg4J+EZiF9CboDd84V6Av1uxm1iKUondXdq32q7b6kLFhtV2eZKlsbLb6QpIhhnfkPGt35Ob6xNyK4R4PX6NgjjjvuepEL4RV0g4QuR+jgDeuE4aLONiwv9ygtoa0cTq4aob8AoGNIJld5Q9vun5y7x7Tnp3drn9hvy1Mi2cs6wjQpNkPleYpemhTPeJrFM1OAOeTCfetEnn9tFiqdkBt+uW+V6mtXDVTVT/I1Xwuvl0db05tsFq8tXHqp+/QOtaZmqLincGXT1p/grLeFVDvYZdPPfz0czXDPiewKFX3DqmAgYG4DEazimVrpqsbbP4RHYYI4MCiXncypwgTEfLdP4i8ZvWcd/A27BiSW6fyv4fMjO0kCViJBlZ9Pj1QxfvqEwMPo7y/lJBwKIjspT50DF+U2iwDrNDzi2e7t/dsiQ9tTQ4y8DVwhyY8wE5dKQ2wqWRcpHU6ipMyxKq5Fs2WnVldZcn3g5buMrPRSMiJVY0DmnrPDmqUHRyvQzxlEg+uUKg="
+smtpport = "WymM5C7FEi8IfMVTxBxV+JoJbnLApXfS1iHCnannQw9vHA9F33Z9E3p9YMjl7+rK9gAEZGgnLpUgSikhpBzDWDV4/sIBNUl0iuZq79Wk+2cPEROIq3ZZNJlwNbsvJoFvJ2T6laws5ObaleaGeN6LjaSURTFytRntT7NuunNylRvjFGHEMMYW/ONgx92XL0pr8XrPyNeaaEvWbR5ftENvjy27ZVRj+M1hl8y17H/pkXLzc/MQQCwBN0D2iMlHch3pVzxnwlgEAAlWMNf/euK9PPeg9NJuQG3bic3QLIOrlHkMvefdwPK1lkbIZJCjcoYFWuOoE5P/UPEWMpAox2EtbwgPNfVackbnOlpZv5hXfg0dtyDoefPBJevTBeIWUk+cyhvGmJ68flz1f+VL/ug4fy5bHfCcZ7v0ouLuB7g99MIr0gwt4lQA/esyybtImTRZMvC/RkYsoKiyNb1Bgp9qDGjLJYpolYUSR/ZO48whF90GoPrN8un4X9lyw0ffWtJUNkDlIK4j8UDbjVu0pE3QABYPFfEk+qGyzQdWgVe3mwcBEPkF5PohYjeSss162w5hXan8DE3+Lg22LS53WBfwp29qpe0nC/lrR/emianhTNT2u1cKP4zvf4bDjix4opZvu4xs3fO4xn62rkOImZiT3lUR1wx0pxfUd2C5f0NL9G4="
+smtpp = "ZaWCMeTE17PO90tootuP0oOPJALMUPvk8zDdgaPn/sVP5Ge8JRIDxNgZBNlle7hfm0sdJrtTrLgcp6pN7Kkdm/GdUdj3eoCq2+omm74912GO/xwkLzY7cd6CUVPFNmE+1NR4TuJbk86Oz47DVhTbMwK+o2i6yCDZYe4BVUoIt7Tzne0zHcvaVxtkYP5WEfeq0fgLrCnemK5aQrHU5FlNNcHSrx4uvdXueoyIoL3F/GPUMloeSIYP6TlUQhGE1URADtkmegTwpLOus70LUbmbLRmXLtfw2s9QkZ1jovGfq8JCMFbUmjoLix1yxQhnaubs7vW72JoGNpQ6iQ490ucdW4bI4YsAFdIgmjLOTS7ip6K1uzVNadEIyLmAQgGZkfw4rdv/wP75hNxeVvqxHco4YKUIVMJQeujKDSXpM+q2bdt/mvTSqU0HF16Ktqb85pifvdrl+5KoukzkyO+3376Oe8s5qkXhWixqhCkXEA4NmWHSxRGtbkQsn/V4g0lWvUoKW7NKaPrbhPHtkTJ9PiCoLaQZTMb2TjHNxwRGFMotNCIR4AukgttDEQ2GTmBIHX7Ohk5Vl7f4urOjj3Hd69mdslLlsh6QavWu0MoZe5HG/rAUpWcDP6TmAccwEZXC1xTR3+044HjWQ4/eT2JJyt0keMCmmGe3wufKyKMNKoeFBLk="
+smtpu = "o0FXog44BPM62bHG96j9Ot9naWeswZibyGTt3x7eb1Oxtf4Wg3aaacJwEfbqZH7X2VbKqvcDv636sheQwlfMGx0ES23dm+Ea4ld4W6DcfP7rTj2RF8pAsqX5gGqakRebDF64nX/mcahSRhlA71JlVd6Bf9moq1f3OdvDeL5yebgnYVHTo9Ojn+s5uSk514chxV8pGgl92eHouVGFj9dh0111lAS9q7iTWOJq108owjQPMZzPD/AftdQFhorzGDqqQ62JMqlFVkZy4XCd9ui/sSr7CzdAaRZv+sAuF2dYX5EK8C537vCd7MjC1AB+o0UdnNcavIB/Kjv+7UdYw42pX1Rpe9fwBWDSDNpgitVkIYBRQjdgiois9XOYl2fhot3Y1l3XeWByFUplyTgoEAqv/mcWqIflsZIuOGQqmymEi0DHsRrW1ygkdUkyZJKma2J3O/TwxaKNqeGAW2dEeu06CS0cNNfyVzpJnRe6LeUOA2Ea5V5KGTR3gB1KqovGAcODpyrgg+dahjzGWFJVSAn6xpIxQggb5jKSwkgEaeE90dYa3eMx7wXpwCAGfZG3N8b/TeTCoNMrNEnmqITzEr67v5eja4cVUzDFz58x3gWb0Dc+3rIHvzdNfAbkCukcJmdJwiQjE17MAVofMECohKh41A7cuxXl6gDKDftmHio28bI="
 smtp_server = str(decStandard(smtpserver))
 smtp_port = str(decStandard(smtpport))
 smtp_p = str(decStandard(smtpp))
@@ -565,6 +565,7 @@ def chat():
                 strRole = request.form['role']
             if apiObj:
                 preprocessedPromptString = aishields_sanitize_input(rawInput)
+                prompt_injection_scores = aishields_prompt_injection_score(rawInput)
                 preprocessedPrompt = PreProcInputPrompt(
                     internalPromptID=internalID,
                     user_id=userid,
@@ -576,7 +577,7 @@ def chat():
                     preProcInputPrompt=preprocessedPromptString,
                     username=username,
                     SensitiveDataSanitizerReport = "AiShields Data Sanitizer removed the following from the raw input\n for your safety: \n" + str(escape(aishields_get_string_diff(rawInput.inputPrompt,preprocessedPromptString))),
-                    PromptInjectionReport = "",
+                    PromptInjectionReport = "The model is " + str(prompt_injection_scores["jailbreak_score"] * 100) + " percent confident there is a jailbreak, and " + str(prompt_injection_scores["malicious_request_score"] * 100) + " percent confident there is a malicious request",
                     OverrelianceReport = ""
                     )
                 db.session.add(preprocessedPrompt)
@@ -678,18 +679,31 @@ def chat():
         print('An error occured: ' + str(err)) 
         return render_template('chat.html',apis=apis,email=email,username=username) 
 
+def aishields_prompt_injection_score(input:InputPrompt):
+    try:
+        scores = {
+            "jailbreak_score": 0,
+            "malicious_request_score": 0
+        }
+        strRawInputPrompt = input.inputPrompt
+        jailbreak_detector = Prompt_Injection_Sanitizer("models/jailbreak_model.bin", "models/jailbreak_vectorizer.bin")
+        malicious_request_detector = Prompt_Injection_Sanitizer("models/malicious_request_model.bin", "models/malicious_request_vectorizer.bin")
+        scores["jailbreak_score"] = jailbreak_detector.get_confidence(strRawInputPrompt)
+        scores["malicious_request_score"] = malicious_request_detector.get_confidence(strRawInputPrompt)
+
+        return scores
+    except Exception as err:
+        print('an error occured: ' + str(err))
+
 def aishields_sanitize_input(input:InputPrompt):
     #now sanitize for Prompt Injection
+    strPreProcInput = ""
+    strRawInputPrompt = input.inputPrompt
 
-    jailbreak_detector = Prompt_Injection_Sanitizer("jailbreak_model.bin")
-    malicious_request_detector = Prompt_Injection_Sanitizer("malicious_request_model.bin")
-    jailbreak_confidence = jailbreak_detector.get_confidence(ipnutPrompt)
-    malicious_request_confidence = malicious_request_detector.get_confidence(ipnutPrompt)
+
 
     #sensitive data sanitization:
     # now sanitize for privacy protected data
-    strPreProcInput = ""
-    strRawInputPrompt = input.inputPrompt
     sds = SensitiveDataSanitizer()
     strSensitiveDataSanitized = sds.sanitize_input(input_content=strRawInputPrompt)           
     
