@@ -107,7 +107,11 @@ class RequestLog(db.Model):
 
     @staticmethod
     def get_request_count(client_id):
-        return RequestLog.query.filter_by(client_id=client_id).count()
+        # Calculate the datetime 10 minutes ago
+        ten_minutes_ago = datetime.datetime.now() - datetime.timedelta(minutes=10)
+        
+        # Filter requests based on client_id and creation date
+        return RequestLog.query.filter_by(client_id=client_id).filter(RequestLog.create_date >= ten_minutes_ago).count()
 
 class User(db.Model):
     __tablename__ = "users"
@@ -289,8 +293,9 @@ def before_request():
         # MDOS (Model Denial of Service entrypoint)
         flash('Something went wrong, please try again', 'success')
         abort(400)
-    elif request_count >= 2:  # Adjust the limit as needed
+    elif request_count >= 10:  # Adjust the limit as needed
         flash('Too many requests, please try again later', 'danger')
+        print(request_count)
         abort(429)  # Too Many Requests status code
     
 @app.route("/",methods=['GET','POST'])
