@@ -340,7 +340,7 @@ def before_request():
         # MDOS (Model Denial of Service entrypoint)
         flash('Something went wrong, please try again', 'success')
         abort(400)
-    elif request_count >= 10:  # Adjust the limit as needed
+    elif request_count >= 500:  # Adjust the limit as needed
         flash('Too many requests, please try again later', 'danger')
         print(request_count)
         abort(429)  # Too Many Requests status code
@@ -676,7 +676,7 @@ def chat():
                     OverrelianceReport = "",
                     OverrelianceKeyphraseData = ""
                 )
-                preprocessedOverrelianceObj = aishields_overreliance_inputfun(rawInput,preprocessedPrompt)
+                #preprocessedPrompt = aishields_overreliance_inputfunc(rawInput,preprocessedPrompt)
                 #=== ===
                 
                 db.session.add(preprocessedPrompt)
@@ -733,7 +733,7 @@ def chat():
                     created_date = datetime.datetime.now(datetime.timezone.utc)
                 )
                 postProcPromptObj = aishields_postprocess_output(postProcPromptObj)
-                aishields_overreliance_postProc(rawInput,preprocessedOverrelianceObj,postProcPromptObj)
+                preprocessedPrompt = aishields_overreliance_postProc(rawInput,preprocessedPrompt,postProcPromptObj,rawInput)
                 
                 db.session.add(postProcPromptObj)
                 db.session.commit()
@@ -763,7 +763,7 @@ def chat():
                     postProcResponse_id = postProcRespObj().id,
                     SensitiveDataSanitizerReport = preProcObj().SensitiveDataSanitizerReport,
                     PromptInjectionReport = preProcObj().PromptInjectionReport,    
-                    OverrelianceReport = preprocessedOverrelianceObj.OverrelianceReport,
+                    OverrelianceReport = preprocessedPrompt.OverrelianceReport,
                     InsecureOutputReportHandling = postProcRespObj().InsecureOutputHandlingReport,     
                     updated_date = datetime.datetime.now(datetime.timezone.utc)
                 )
@@ -796,7 +796,7 @@ def aishields_sanitize_input(input:InputPrompt):
     except Exception as err:
         print('An error occured: ' + str(err)) 
 
-async def aishields_promptInjection_check(input:InputPrompt):
+def aishields_promptInjection_check(input:InputPrompt):
         #sensitive data sanitization:
         # now sanitize for privacy protected data
     try:
@@ -806,7 +806,7 @@ async def aishields_promptInjection_check(input:InputPrompt):
     except Exception as err:
         print('An error occured: ' + str(err))
 
-async def aishields_overreliance_inputfun(input:InputPrompt, preproc:PreProcInputPrompt):
+def aishields_overreliance_inputfunc(input:InputPrompt, preproc:PreProcInputPrompt):
         #sensitive data sanitization:
         # now sanitize for privacy protected data
     try:
@@ -820,17 +820,24 @@ async def aishields_overreliance_inputfun(input:InputPrompt, preproc:PreProcInpu
         overreliance_keyphrase_data_list = ods.get_keyphrases_and_links(preproc.preProcInputPrompt,NUMBER_OF_SEARCHES,link_number_limit=NUMBER_OF_LINKS, stopword_list=STOPWORD_LIST)
         
         overreliance_keyphrase_data_list = ods.get_articles(overreliance_keyphrase_data_list,site_ignore_list=SITE_IGNORE_LIST)
-        preproc.OverrelianceKeyphraseData = repr(overreliance_keyphrase_data_list)
-        return preproc
+        #preproc.OverrelianceKeyphraseData = repr(overreliance_keyphrase_data_list)
+        return overreliance_keyphrase_data_list
     except Exception as err:
         print('An error occured: ' + str(err))  
 
-async def aishields_overreliance_postProc(input:ApiResponse,preproc:PreProcInputPrompt, postproc:PostProcResponse):
+def aishields_overreliance_postProc(input:ApiResponse,preproc:PreProcInputPrompt, postproc:PostProcResponse,rawinput:InputPrompt):
         #sensitive data sanitization:
         # now sanitize for privacy protected data
     try:
-        ods = ODS()
-        data_summary_list = ods.compare(list(preproc.OverrelianceKeyphraseData),postproc.rawOutputResponse)
+        SITE_IGNORE_LIST = ["youtube.com"]
+        NUMBER_OF_SEARCHES = 4
+        NUMBER_OF_LINKS = 10
+        STOPWORD_LIST = ["*", "$"]
+        
+        ods= ODS()
+        overreliance_keyphrase_data_list = ods.get_keyphrases_and_links(preproc.preProcInputPrompt,NUMBER_OF_SEARCHES,link_number_limit=NUMBER_OF_LINKS, stopword_list=STOPWORD_LIST)
+        overreliance_keyphrase_data_list = ods.get_articles(overreliance_keyphrase_data_list,site_ignore_list=SITE_IGNORE_LIST)
+        data_summary_list = ods.compare(overreliance_keyphrase_data_list,postproc.rawOutputResponse)
         overreliance_string = f"score: {data_summary_list[0]['score']} of {data_summary_list[0]['link']}"
         preproc.OverrelianceReport = overreliance_string
         return preproc
