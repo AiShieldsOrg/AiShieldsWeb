@@ -10,6 +10,7 @@ from sqlalchemy.orm import relationship, backref
 from sqlalchemy.ext.declarative import declarative_base
 from self_protection import protect,sanitize_input,getHash,encStandard,decStandard  
 import openai
+import anthropic
 import uuid
 from sensitive_information.sensitive_data_sanitizer import SensitiveDataSanitizer
 from aishieldsemail import send_secure_email
@@ -100,19 +101,19 @@ class Clients(db.Model):
     id = db.Column(BigInteger, primary_key=True)
     IPaddress = db.Column(NVARCHAR)
     MacAddress = db.Column(NVARCHAR)
-    created_date = db.Column(DateTime,unique=False, default=datetime.datetime.now(datetime.timezone.utc))
+    create_date = db.Column(DateTime,unique=False, default=datetime.datetime.now(datetime.timezone.utc))
     requests = relationship("RequestLog", secondary=requests_client)
 
 class RequestLog(db.Model):
     __tablename__ = "requests"
-    id = db.Column(db.Integer, primary_key=True)
-    client_id = db.Column(db.Integer, nullable=False)  # Assuming client ID is a string
-    client_ip = db.Column(db.VarChar, nullable=False)  # Assuming client ID is a string
-    url = db.Column(db.VARCHAR)
-    request_type = db.Column(db.String(255))
-    Headers = db.Column(db.Text)  # Using Text instead of NVARCHAR for compatibility
-    Body = db.Column(db.Text)
-    create_date = db.Column(db.DateTime, nullable=False, default=datetime.datetime.now)
+    id = db.Column(Integer, primary_key=True)
+    client_id = db.Column(Integer, nullable=False)  # Assuming client ID is a string
+    client_ip = db.Column(NVARCHAR, nullable=False)  # Assuming client ID is a string
+    url = db.Column(NVARCHAR)
+    request_type = db.Column(NVARCHAR)
+    Headers = db.Column(NVARCHAR)  # Using Text instead of NVARCHAR for compatibility
+    Body = db.Column(NVARCHAR)
+    create_date = db.Column(DateTime, nullable=False, default=datetime.datetime.now)
 
     # def __init__(self, client_id,client_ip request_type, headers, body, url):
     #     self.client_ip = client_ip
@@ -324,8 +325,8 @@ def before_request():
         client_id=client_info.id, 
         client_ip=client_info.IPaddress, 
         request_type=request.method,
-        headers=repr(dict(request.headers)),
-        body=request.data.decode('utf-8'),
+        Headers=repr(dict(request.headers)),
+        Body=request.data.decode('utf-8'),
         url=request.url
     )
     db.session.add(request_data)
