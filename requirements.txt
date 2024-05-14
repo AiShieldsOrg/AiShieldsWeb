@@ -25,6 +25,7 @@ pydantic==2.7.1
 pydantic_core==2.18.2
 pyasn1==0.6.0
 python-dateutil==2.9.0.post0
+python-dotenv==1.0.1
 requests==2.31.0
 rsa==4.9
 six==1.16.0
