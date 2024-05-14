@@ -1,5 +1,5 @@
 import re
-from config import SENSITIVE_DATA_CONFIGS
+from sensitive_information.config import SENSITIVE_DATA_CONFIGS
 from presidio_analyzer import AnalyzerEngine
 from presidio_anonymizer import AnonymizerEngine
 
