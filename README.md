@@ -36,21 +36,17 @@ chmod +x  helpers/Patrick-5e39e57f-0550-49f3-8db6-d33cd139168f.pem
 ```python
 strPEMfileName = './helpers/Patrick-5e39e57f-0550-49f3-8db6-d33cd139168f.pem'
 ```
-   then in `app.py` replace the values in lines 21 thru 27 with the values here:
-   https://discordapp.com/channels/1229942715450523658/1230004837845045369/1239304937893138492
-   and then in line 46 of `app.py`:
-   https://discordapp.com/channels/1229942715450523658/1230004837845045369/1239305103882588304
-   
-5. Set the database password in your local copy 
-On or around line 6 of app.py
-`app.config['SECRET_KEY'] = `
-set the secret SQLite key to your_secret_key
+5. Download .env file from discord: https://discord.com/channels/1229942715450523658/1230004837845045369/1239981727871406182
+Do not forget to set the correct local path to your sqllite 3 `sqlite3:////`. 
+6. Set the secret SQLite key to your_secret_key [optional]
 ```python
 app.config['SECRET_KEY'] = 'your_secret_key' 
 ```
-6. run in Flask or debug in ide:
+7. run in Flask or debug in IDE:
+
 UNIX/MacOS/Linux 
 run the `run_flask_app.sh`
+
 Windows:
 ```commandline
 $env:FLASK_APP = "app.py"
