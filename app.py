@@ -16,6 +16,10 @@ from aishieldsemail import send_secure_email
 import secrets
 from insecure_out_handling import InsecureOutputSanitizer
 from overreliance.overreliance_data_sanitizer import OverrelianceDataSanitizer as ODS
+
+import nltk
+nltk.download('stopwords')
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = str(decStandard('OY/PyvGbiR1wZE+cbnnQt9xQ966z2GflY0E7nykRhfGh4CzfMThApARnADUuRG6qRK0apXfOHBD+GR5/cENiAAzrKhr4JBYexQaSTRTpvpH0PjG51O/L3okyW5GgNDXtPRUkruNJPtrmIjqnk9fy5LI/agzGN7nULnC1VUJosnmRXl57g6+TX8VBU2Q2HT8D5GXenELrN65QNka09tNBIblj+qKuWE9LEnkt1I+n0iTvjsoDi8i5szhVNsWy+WYcwRM7cFJq70ExUK61sr90hbitpWsgvgZjzTBI9xQwNKSMAG2HnJvCM/khkiqZEXZEObaq7kYtph0aR3BK6ANdT5ToW7w/Ct/qmZU74pr/rivvvbWbtgGv3gzLcvdhRS5nntezTWUda568iF18JhVrCyoZIwpvMbTWrF9baXGBCzEhyFLl4VAh8Gw36/1PFaqJCKMlCdQLUntQjqHkX/Kc+vIo58TlvC/rGIWYd2tPf8TDi/vuSeB3hPAkdTRv3eN+YTGC855AL2Nuu/N1i70IF6yGQ4lLSTSWGHEyx/z2nqkqhIkbF7W+4TXQaAXbJOaXOZgz6HiaUmM6eBQpiveKnGBT88IKmknPGgIzPr94iib0x2cgSwwmHXDzxADJJ3/UUYVg6m2/hF3/9Igjyt8N2dxJV/y2V8iPV7UONN1Nzy0='))
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////Users/JamesYu/Desktop/GitHub/AiShieldsFlaskWeb/AiShieldsWeb/instance/aiShieldsDB3.db'
@@ -107,12 +111,16 @@ class RequestLog(db.Model):
         self.body = body
 
     @staticmethod
+    # Filter requests based on client_id, Referer containing "chat", and creation date
     def get_request_count(client_id):
         # Calculate the datetime 10 minutes ago
         ten_minutes_ago = datetime.datetime.now() - datetime.timedelta(minutes=10)
         
-        # Filter requests based on client_id and creation date
-        return RequestLog.query.filter_by(client_id=client_id).filter(RequestLog.create_date >= ten_minutes_ago).count()
+        # Filter requests based on client_id, headers containing "chat", and creation date
+        return RequestLog.query.filter_by(client_id=client_id) \
+                            .filter(RequestLog.create_date >= ten_minutes_ago) \
+                            .filter(RequestLog.headers.like('%chat%')) \
+                            .count()
 
 class User(db.Model):
     __tablename__ = "users"
@@ -283,6 +291,7 @@ def before_request():
         headers=json.dumps(dict(request.headers)),
         body=request.data.decode('utf-8')
     )
+
     db.session.add(request_data)
     db.session.commit()
 
@@ -290,13 +299,12 @@ def before_request():
     # James Yu can add code here to handle MDOS protection
     client_id = request.remote_addr
     request_count = RequestLog.get_request_count(client_id)
+    print(request_count)
     if not protect(request):
         # MDOS (Model Denial of Service entrypoint)
         flash('Something went wrong, please try again', 'success')
         abort(400)
-    elif request_count >= 10:  # Adjust the limit as needed
-        flash('Too many requests, please try again later', 'danger')
-        print(request_count)
+    elif request_count >= 50:  # Adjust the limit as needed
         abort(429)  # Too Many Requests status code
     
 @app.route("/",methods=['GET','POST'])
@@ -533,7 +541,6 @@ def forgot():
     except Exception as err:
         print('An error occured: ' + str(err))
         return render_template("login.html")
-        
 
 @app.route('/chat', methods=['GET', 'POST'])
 def chat():
