@@ -11,7 +11,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from self_protection import protect,sanitize_input,getHash,encStandard,decStandard  
 import openai
 import uuid
-from sensitive_data_sanitizer import SensitiveDataSanitizer
+from sensitive_information.sensitive_data_sanitizer import SensitiveDataSanitizer
 from aishieldsemail import send_secure_email
 import secrets
 from insecure_out_handling import InsecureOutputSanitizer
