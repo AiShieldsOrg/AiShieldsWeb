@@ -108,20 +108,12 @@
     {% if output %}
     
     <center><h2>AiShields Report</h2>
-    <table border="1">
-        <tr>
-            <th>Category</th>
-            <th>Details</th>
-            <th>AiShields ID</th>
-        </tr>
+        <br/> {{ finding[0].id }} <br/><br/>
         {% for finding in findings %}
-        <tr>
-            <td>{{ finding.category }}</td>
-            <td>{{ finding.details }}</td>
-            <td>{{ finding.id }}</td>
-        </tr>
+    Category: {{ finding.category }} <br/><br/>
+            {{ finding.details }}
         {% endfor %}
-    </table></center>
+    </center>
     {% endif %}
 </body>
 </html>
