@@ -19,7 +19,10 @@ from insecure_out_handling import InsecureOutputSanitizer
 from overreliance.overreliance_data_sanitizer import OverrelianceDataSanitizer as ODS
 import json
 import netifaces as nif
+from dotenv import load_dotenv
 import os
+
+load_dotenv()
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = str(decStandard(os.getenv('SECRET_KEY')))
@@ -46,7 +49,7 @@ apis = [{"APIowner":"OpenAI","TextGen": {"Name":"ChatGPT","Models":[
 
 def app_context():
     app = Flask(__name__)
-    os.getenv('STR_APP_KEY')
+    strAppKey = decStandard(os.getenv('STR_APP_KEY'))
     app.secret_key = strAppKey.encode(str="utf-8")
     csrf = CSRFProtect(app)
     with app.app_context():
