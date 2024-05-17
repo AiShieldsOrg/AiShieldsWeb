@@ -586,10 +586,17 @@ def chat():
     try:
         if request.method == 'GET':
             if request.query_string is not None:
-               if str(request.query_string).startswith("?chat="):
-                    chatId = request.query_string.split("=")[1]
+                email = request.form.get(key="email")
+                user = (
+                        db.session.query(User)
+                        .filter(User.email == str(email).lower(),User.user_verified == 1)
+                        .one_or_none()
+                    )
+                if user is not None:
+                    if str(request.query_string).startswith("?chat="):
+                        chatId = request.query_string.split("=")[1]
                     #now get all the data to repopulate the form/page data elements
-                    rawInput = (db.session.query(InputPrompt).filter(InputPrompt.internalPromptID==str(chatId),InputPrompt.user_id == user.id).one_or_none)
+                        rawInput = (db.session.query(InputPrompt).filter(InputPrompt.internalPromptID==str(chatId),InputPrompt.user_id == user.id).one_or_none)
                     if rawInput is not None:
                         preprocPrompt = (db.session.query(PreProcInputPrompt).filter(PreProcInputPrompt.internalPromptID==str(chatId)).one_or_none)
                         if preprocPrompt is not None:
@@ -612,10 +619,10 @@ def chat():
                                         for prmpt in InputPromptHistory:
                                             chathistory[prmpt.internalPromptID]=prmpt.inputPrompt
                                         return render_template('chat.html',rawInput=rawInputStr,rawOutput=rawOutputStr,preProcStr=preprocPromptStr,InputPromptHistory=chathistory,PostProcResponseHistory="",apis=apis,email=email,username=rawInput().username,response=postProcResp().postProcOutputResponse,findings=findings,output=True)
-                                return render_template('chat.html',apis=apis,email=request.form["email"],username=user.username)
-                            return render_template('chat.html',apis=apis,email=request.form["email"],username=user.username)
-                        return render_template('chat.html',apis=apis,email=request.form["email"],username=user.username)
-                    return render_template('chat.html',apis=apis,email=request.form["email"],username=user.username)
+                                return render_template('chat.html',apis=apis,email=request.form["email"],username=user().username,InputPromptHistory={})
+                            return render_template('chat.html',apis=apis,email=request.form["email"],username=user.username,InputPromptHistory={})
+                        return render_template('chat.html',apis=apis,email=request.form["email"],username=user.username,InputPromptHistory={})
+                    return render_template('chat.html',apis=apis,email=request.form["email"],username=user.username,InputPromptHistory={})
             elif request.form.get(key="email") is not None:
                 #return render_template('chat.html',apis=apis,email=request.form["email"],username=user.username) 
                 email = request.form.get(key="email")
@@ -625,10 +632,10 @@ def chat():
                         .one_or_none()
                     )
                 if user is not None:
-                    return render_template('chat.html',apis=apis,email=request.form["email"],username=user.username)    
+                    return render_template('chat.html',apis=apis,email=request.form["email"],username=user.username,InputPromptHistory={})    
             else:
                 return render_template('newaccount.html',apis=apis,email=request.form["email"])
-            return render_template('chat.html',apis=apis,email=request.form["email"],username=user.username)
+            return render_template('chat.html',apis=apis,email=request.form["email"],username=user.username,InputPromptHistory={})
         elif request.method == 'POST':
             #if protect(request):
             message = ""
@@ -816,6 +823,7 @@ def chat():
                 findings = [{"category":"Sensitive Data","details":aiShieldsReportObj.SensitiveDataSanitizerReport,"id":aiShieldsReportObj.internalPromptID},
                 { "category":"Prompt Injection","details":aiShieldsReportObj.PromptInjectionReport,"id":aiShieldsReportObj.internalPromptID},
                 {"category":"Overreliance","details":aiShieldsReportObj.OverrelianceReport,"id":aiShieldsReportObj.internalPromptID},
+                {"category":"MDOS","details":aiShieldsReportObj.OverrelianceReport,"id":aiShieldsReportObj.MDOSreport},
                 {"category":"Insecure Output Handling","details":aiShieldsReportObj.InsecureOutputReportHandling,"id":aiShieldsReportObj.internalPromptID}]
                 InputPromptHistory = (db.session.query(InputPrompt).filter(InputPrompt.user_id == userid))
                 chathistory = {}
