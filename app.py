@@ -586,7 +586,7 @@ def chat():
     try:
         if request.method == 'GET':
             if request.query_string is not None:
-               if request.query_string.startswith("?chat="):
+               if str(request.query_string).startswith("?chat="):
                     chatId = request.query_string.split("=")[1]
                     #now get all the data to repopulate the form/page data elements
                     rawInput = (db.session.query(InputPrompt).filter(InputPrompt.internalPromptID==str(chatId),InputPrompt.user_id == user.id).one_or_none)
