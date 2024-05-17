@@ -825,10 +825,13 @@ def chat():
                 {"category":"Overreliance","details":aiShieldsReportObj.OverrelianceReport,"id":aiShieldsReportObj.internalPromptID},
                 {"category":"MDOS","details":aiShieldsReportObj.MDOSreport,"id":aiShieldsReportObj.MDOSreport},
                 {"category":"Insecure Output Handling","details":aiShieldsReportObj.InsecureOutputReportHandling,"id":aiShieldsReportObj.internalPromptID}]
-                InputPromptHistory = (db.session.query(InputPrompt).filter(InputPrompt.user_id == userid).order_by(desc(InputPrompt.id)))
+                InputPromptHistory = (db.session.query(InputPrompt).filter(InputPrompt.user_id == userid).order_by(desc(InputPrompt.created_date)))
                 chathistory = {}
+                #chathistoryReversed = {}
                 for prmpt in InputPromptHistory:
                     chathistory[prmpt.internalPromptID]=prmpt.inputPrompt
+                #for revprmnt in dict(chathistory).items().__reversed__():
+                    #chathistoryReversed[revprmnt.index] = revprmnt
                 PostProcResponseHistory = (db.session.query(PostProcResponse).filter(PostProcResponse.user_id == userid))
                 return render_template('chat.html',rawInput=rawInputObj().inputPrompt,preProcStr=preProcObj().preProcInputPrompt,rawResponse=rawOutputObj().rawoutput,InputPromptHistory=chathistory,PostProcResponseHistory=PostProcResponseHistory,apis=apis,email=email,username=username,response=postProcRespObj().postProcOutputResponse,findings=findings,output=True)
         else:
