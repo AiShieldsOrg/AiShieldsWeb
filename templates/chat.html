@@ -182,13 +182,7 @@
                 <input type="password" name="apitoken" required>
 
                 <label for="inputprompt">Prompt:</label>
-                <textarea id="inputprompt" name="inputprompt" rows="4" cols="50" required>
-                    {% if rawInput != none %}
-                        Raw Input: &nbsp;&nbsp;{{ rawInput }}
-                        <br/>
-                        Pre-Processed Input: &nbsp;&nbsp;{{ preProcStr }}
-                    {% endif %}
-                    &nbsp;</textarea>
+                <textarea id="inputprompt" name="inputprompt" rows="4" cols="50" required>{{ inputprompt }}</textarea>
                 <input type="hidden" name="email" value="{{ email }}" />
                 <input type="hidden" name="username" value="{{ username }}" />
                 
@@ -201,23 +195,42 @@
 
         {% if output %}
         <div class="center">
-            <h2>Sanitized Response:</h2>
-            <textarea id="response" name="response" rows="4" cols="50" required>
-                {% if rawOutput != none %}
-                    Raw Output: &nbsp;&nbsp; {{ rawOutput }}<br/>
+            <h2>Raw Input:</h2>
+            <textarea id="rawInput" name="rawInput" rows="4" cols="50" required>
+                {% if rawInput != none %}
+                    {{ rawInput }}
                 {% endif %}
-                &nbsp;{{response}}</textarea>
+                </textarea>
+                <h2>Pre-Processed Input:</h2>
+            <textarea id="preProcStr" name="preProcStr" rows="4" cols="50" required>
+                {% if preProcStr != none %}
+                    {{ preProcStr }}
+                {% endif %}
+                </textarea>
+                <h2>Raw GenAI Output:</h2>
+         
+                <textarea id="rawResponse" name="rawResponse" rows="4" cols="50" required>
+                    {% if rawResponse != none %}
+                        {{ rawResponse }}
+                    {% endif %}
+                    </textarea>
+                <h2>Post-Processed GenAI Output:</h2>
+                <textarea id="response" name="response" rows="4" cols="50" required>
+                    {% if response != none %}
+                        {{ response }}
+                    {% endif %}
+                    </textarea>
         </div>
         {% endif %}
 
         {% if output %}
         <div class="center">
             <h2>AiShields Report</h2>
-            <p>Report ID: {{ findings[0].id }}</p>
+            <p>Report ID: {{ findings[0].id }}</p><hr/>
             {% for finding in findings %}
             <p>Category: {{ finding.category }}</p><br/>
             {{ finding.details }}
-            <br/>
+            <br/><hr/><br/>
             {% endfor %}
         </div>
         {% endif %}
