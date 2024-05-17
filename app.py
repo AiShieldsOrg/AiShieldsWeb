@@ -823,14 +823,14 @@ def chat():
                 findings = [{"category":"Sensitive Data","details":aiShieldsReportObj.SensitiveDataSanitizerReport,"id":aiShieldsReportObj.internalPromptID},
                 { "category":"Prompt Injection","details":aiShieldsReportObj.PromptInjectionReport,"id":aiShieldsReportObj.internalPromptID},
                 {"category":"Overreliance","details":aiShieldsReportObj.OverrelianceReport,"id":aiShieldsReportObj.internalPromptID},
-                {"category":"MDOS","details":aiShieldsReportObj.OverrelianceReport,"id":aiShieldsReportObj.MDOSreport},
+                {"category":"MDOS","details":aiShieldsReportObj.MDOSreport,"id":aiShieldsReportObj.MDOSreport},
                 {"category":"Insecure Output Handling","details":aiShieldsReportObj.InsecureOutputReportHandling,"id":aiShieldsReportObj.internalPromptID}]
-                InputPromptHistory = (db.session.query(InputPrompt).filter(InputPrompt.user_id == userid))
+                InputPromptHistory = (db.session.query(InputPrompt).filter(InputPrompt.user_id == userid).order_by(desc(InputPrompt.id)))
                 chathistory = {}
                 for prmpt in InputPromptHistory:
                     chathistory[prmpt.internalPromptID]=prmpt.inputPrompt
                 PostProcResponseHistory = (db.session.query(PostProcResponse).filter(PostProcResponse.user_id == userid))
-                return render_template('chat.html',InputPromptHistory=chathistory,PostProcResponseHistory=PostProcResponseHistory,apis=apis,email=email,username=username,response=postProcRespObj().postProcOutputResponse,findings=findings,output=True)
+                return render_template('chat.html',rawInput=rawInputObj().inputPrompt,preProcStr=preProcObj().preProcInputPrompt,rawResponse=rawOutputObj().rawoutput,InputPromptHistory=chathistory,PostProcResponseHistory=PostProcResponseHistory,apis=apis,email=email,username=username,response=postProcRespObj().postProcOutputResponse,findings=findings,output=True)
         else:
             return render_template('chat.html',InputPromptHistory={},apis=apis,email=email,username=username)
     except Exception as err:
@@ -881,8 +881,8 @@ def aishields_overreliance_inputfunc(input:InputPrompt, preproc:PreProcInputProm
         # now sanitize for privacy protected data
     try:
         SITE_IGNORE_LIST = ["youtube.com"]
-        NUMBER_OF_SEARCHES = 4
-        NUMBER_OF_LINKS = 10
+        NUMBER_OF_SEARCHES = 1
+        NUMBER_OF_LINKS = 1
         STOPWORD_LIST = ["*", "$"]
         
         ods = ODS()
