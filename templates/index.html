@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>AiShields</title>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/milligram/1.4.1/milligram.min.css">
+        <style>
+            body {
+                padding: 2rem;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+            }
+            .container {
+                max-width: 800px;
+                margin: 0 auto;
+                flex-grow: 1;
+                padding: 2rem;
+                text-align: center;
+            }
+            .sidebar {
+                width: 200px;
+                background-color: #f4f4f4;
+                padding: 1rem;
+                margin-right: 2rem;
+                height: 100vh;
+                position: sticky;
+                top: 0;
+            }
+            .sidebar a {
+                display: block;
+                margin-bottom: 1rem;
+                text-decoration: none;
+                color: Navy; /* Link color changed to Navy blue */
+            }
+            .sidebar a:hover {
+                text-decoration: underline;
+            }
+            .center {
+                text-align: center;
+            }
+            .hidden {
+                display: none;
+            }
+            @media (max-width: 768px) {
+                body {
+                    flex-direction: column;
+                }
+                .sidebar {
+                    width: 100%;
+                    height: auto;
+                    margin-right: 0;
+                }
+                .container {
+                    padding: 1rem;
+                }
+                .mobile-menu {
+                    display: block;
+                    background-color: #f4f4f4;
+                    padding: 1rem;
+                    margin-bottom: 1rem;
+                }
+                .mobile-menu select {
+                    width: 100%;
+                    margin-bottom: 1rem;
+                }
+            }
+            .model-selector {
+                margin-bottom: 1rem;
+            }
+            .button-primary {
+                background-color: Navy !important; /* Button default color changed to Navy blue */
+                border-color: Navy !important; /* Button border color changed to Navy blue */
+                color: White !important; /* Button text color changed to white */
+                font-family: Verdana, sans-serif;
+                font-weight: bolder;
+            }
+            .button-primary:hover {
+                background-color: #000080 !important; /* Slightly darker Navy blue on hover */
+                border-color: #000080 !important; /* Slightly darker Navy blue on hover */
+                color: White !important; /* Ensure text color remains white on hover */
+            }
+            input:focus, select:focus, textarea:focus {
+                border-color: Navy !important; /* Change border color to Navy blue when focused */
+                box-shadow: 0 0 5px Navy; /* Optional: add a shadow for better visibility */
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <img src='/static/AiShieldsShield.PNG' alt='AiShields' style='height:200px;width:200px'/>
+            <br/><br/>
+            <form method='POST' action='/index'>
+                <label for='email'>Email:&nbsp;&nbsp;&nbsp;</label>
+                <input type='email' name='email' required /><br/><br/>
+                <input type='hidden' name='csrf_token' value="{{ csrf_token }}" />
+                <input type='submit' name='submit' value='Next' class="button-primary" />
+            </form>
+        </div>
+    </body>
+</html>

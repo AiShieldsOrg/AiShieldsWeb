@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AiShields Verify Email</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/milligram/1.4.1/milligram.min.css">
+    <style>
+        body {
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            flex-grow: 1;
+            padding: 2rem;
+            text-align: center;
+        }
+        .button-primary {
+            background-color: Navy !important; /* Button default color changed to Navy blue */
+            border-color: Navy !important; /* Button border color changed to Navy blue */
+            color: White !important; /* Button text color changed to white */
+            font-family: Verdana, sans-serif;
+            font-weight: bolder;
+        }
+        .button-primary:hover {
+            background-color: #000080 !important; /* Slightly darker Navy blue on hover */
+            border-color: #000080 !important; /* Slightly darker Navy blue on hover */
+            color: White !important; /* Ensure text color remains white on hover */
+        }
+        input:focus, select:focus, textarea:focus {
+            border-color: Navy !important; /* Change border color to Navy blue when focused */
+            box-shadow: 0 0 5px Navy; /* Optional: add a shadow for better visibility */
+        }
+        a {
+            color: DodgerBlue; /* Link color changed to Dodger blue */
+        }
+        a:hover {
+            color: Navy; /* Link color changed to Navy blue on hover */
+        }
+    </style>
+</head>
+<body>
+    <br/><br/>
+    <center><img src='http://127.0.0.1:5000/static/aishields.jpg' alt='AiShields' style='height:200px;width:200px'/><br/><br/>
+    <h3>AiShields Email Verification</h3>
+    {% with messages = get_flashed_messages() %}
+    {% if messages %}
+    <ul>
+        {% for message in messages %}
+        <li>{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+    {% endwith %}
+</center>
+    <form name="verifyemailform" method="POST" action="/verifyemail">
+        <center>
+            <table>              <tr><td>
+                    <label for="email">Email:</label></td><td>
+        <input type="email" name="email" required value="{{email}}" /></td></tr><tr><td>
+            <tr><td>
+                <label for="email">Code:</label></td><td>
+    <input type="password" name="passphrase" required /></td></tr><tr><td>
+        <input type='hidden' name='csrf_token' value="{{ csrf_token }}" />
+        <input id="btnChat" class="button-primary" type="submit" value="Next" style="align:center;border:3px;color:navy;bordercolor:navy;font-face:verdana;font-weight:bolder"></td>
+    </tr>
+</table></center>
+    </form>
+</body>
+</html>
