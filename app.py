@@ -20,6 +20,9 @@ from overreliance.overreliance_data_sanitizer import OverrelianceDataSanitizer a
 import json
 import netifaces as nif
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = str(decStandard(os.getenv('SECRET_KEY')))

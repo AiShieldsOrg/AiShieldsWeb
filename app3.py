@@ -127,12 +127,15 @@ class RequestLog(db.Model):
     #     self.url = url
 
     @staticmethod
-    def get_request_count(client_ip):
+    def get_request_count(client_id):
         # Calculate the datetime 10 minutes ago
         ten_minutes_ago = datetime.datetime.now() - datetime.timedelta(minutes=10)
         
         # Filter requests based on client_id and creation date
-        return RequestLog.query.filter_by(client_ip=client_ip).filter(RequestLog.create_date >= ten_minutes_ago).count()
+        return RequestLog.query.filter_by(client_id=client_id) \
+                            .filter(RequestLog.create_date >= ten_minutes_ago) \
+                            .filter(RequestLog.Headers.like('%chat%')) \
+                            .count()
 
 class User(db.Model):
     __tablename__ = "users"
