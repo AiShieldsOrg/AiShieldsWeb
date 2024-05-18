@@ -49,7 +49,7 @@ apis = [{"APIowner":"OpenAI","TextGen": {"Name":"ChatGPT","Models":[
 
 def app_context():
     app = Flask(__name__)
-    os.getenv('STR_APP_KEY')
+    strAppKey = os.getenv('STR_APP_KEY')
     app.secret_key = strAppKey.encode(str="utf-8")
     csrf = CSRFProtect(app)
     with app.app_context():
