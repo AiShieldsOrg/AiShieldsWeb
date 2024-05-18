@@ -13,6 +13,7 @@ import openai
 import anthropic
 import uuid
 from sensitive_information.sensitive_data_sanitizer import SensitiveDataSanitizer
+from mdos.mdos_sanitizer import PromptAnalyzer
 from aishieldsemail import send_secure_email
 import secrets
 from insecure_out_handling import InsecureOutputSanitizer
@@ -127,12 +128,12 @@ class RequestLog(db.Model):
     #     self.url = url
 
     @staticmethod
-    def get_request_count(client_ip):
+    def get_request_count(client_id):
         # Calculate the datetime 10 minutes ago
         ten_minutes_ago = datetime.datetime.now() - datetime.timedelta(minutes=10)
         
         # Filter requests based on client_id and creation date
-        return RequestLog.query.filter_by(client_ip=client_ip).filter(RequestLog.create_date >= ten_minutes_ago).count()
+        return RequestLog.query.filter_by(client_id=client_id).filter(RequestLog.create_date >= ten_minutes_ago).count()
 
 class User(db.Model):
     __tablename__ = "users"
@@ -616,6 +617,7 @@ def chat():
                                         findings = [{"category":"Sensitive Data","details":aiShieldsReportObj.SensitiveDataSanitizerReport,"id":aiShieldsReportObj.internalPromptID},
                                             { "category":"Prompt Injection","details":aiShieldsReportObj.PromptInjectionReport,"id":aiShieldsReportObj.internalPromptID},
                                             {"category":"Overreliance","details":aiShieldsReportObj.OverrelianceReport,"id":aiShieldsReportObj.internalPromptID},
+                                            {"category":"MDOS","details":aiShieldsReportObj.MDOSReport,"id":aiShieldsReportObj.internalPromptID},
                                             {"category":"Insecure Output Handling","details":aiShieldsReportObj.InsecureOutputReportHandling,"id":aiShieldsReportObj.internalPromptID}]
                                         InputPromptHistory = (db.session.query(InputPrompt).filter(InputPrompt.user_id == rawInput().user_id))
                                         chathistory = {}
@@ -797,7 +799,11 @@ def chat():
                 if preprocessedPrompt is not None:
                     if preprocessedPrompt.OverrelianceReport is not None:
                         overRelianceReport = preprocessedPrompt.OverrelianceReport
-                mdosReport = getMDOSreport()
+                mdosReport = getMDOSreport(rawInput)
+                
+                print("rawInput: " + rawInput.inputPrompt)
+                print("MDOS Report: " + str(mdosReport))
+                print("overRelianceReport: " + overRelianceReport)
                 aiShieldsReportObj = AiShieldsReport(
                     rawInputPrompt_id = rawInputObj().id,
                     internalPromptID = internalID,
@@ -844,15 +850,26 @@ def chat():
         print('An error occured: ' + str(err)) 
         return render_template('chat.html',apis=apis,email=email,InputPromptHistory={}) 
 
-def getMDOSreport():
+def getMDOSreport(input:InputPrompt):
         #sensitive data sanitization:
         # now sanitize for privacy protected data
     try:
-        strOutput = ""
+        prompt = input.inputPrompt
+
+        # Instantiate the analyzer
+        analyzer = PromptAnalyzer()
         
-         #now sanitize for Prompt Injection
-        #now assess for Overreliance
-        return strOutput
+        # Analyze the prompt
+        is_expensive = analyzer.is_expensive_prompt(prompt)
+        complexity = analyzer.complexity_metric(prompt)
+
+        # Return the results as a dictionary
+        result = {
+            "prompt": prompt,
+            "is_expensive": is_expensive,
+            "complexity_metric": complexity
+        }
+        return str(result)
     except Exception as err:
         print('An error occured: ' + str(err)) 
 
@@ -964,3 +981,4 @@ if __name__ == '__main__':
         app.run(debug=True)
         
         
+

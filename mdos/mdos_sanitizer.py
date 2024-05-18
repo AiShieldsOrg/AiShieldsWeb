@@ -68,7 +68,7 @@ class PromptAnalyzer:
         return token_count * resource_utilization * (1 + semantic_score)
 
 # Example usage:
-prompt = ("Who is lana del rey?")
+prompt = ("Explain the plot of Cinderella in a sentence where each word has to begin with the next letter in the alphabet from A to Z, without repeating any letters.")
 analyzer = PromptAnalyzer()
 print("Is prompt expensive?", analyzer.is_expensive_prompt(prompt))
 print("Complexity metric:", analyzer.complexity_metric(prompt))
