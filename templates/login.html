@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AiShields .:. Login .:. </title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/milligram/1.4.1/milligram.min.css">
+    <style>
+        body {
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            flex-grow: 1;
+            padding: 2rem;
+            text-align: center;
+        }
+        .button-primary {
+            background-color: Navy !important;
+            border-color: Navy !important;
+            color: White !important;
+            font-family: Verdana, sans-serif;
+            font-weight: bolder;
+        }
+        .button-primary:hover {
+            background-color: #000080 !important;
+            border-color: #000080 !important;
+            color: White !important;
+        }
+        input:focus, select:focus, textarea:focus {
+            border-color: Navy !important;
+            box-shadow: 0 0 5px Navy;
+        }
+        a {
+            color: DodgerBlue;
+        }
+        a:hover {
+            color: Navy;
+        }
+        input[type="text"], input[type="password"], input[type="submit"] {
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+        @media (max-width: 768px) {
+            body {
+                padding: 1rem;
+            }
+            .container {
+                padding: 1rem;
+            }
+            input[type="text"], input[type="password"], input[type="submit"] {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <img src='/static/AiShieldsShield.PNG' alt='AiShields' style='height:200px;width:200px'/>
+        <br/>
+        <img src='/static/AiShieldsLogoWordsOnly.jpg' alt='AiShields' style='height:35px;width:200px'/>
+        <br/>
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+        <ul>
+            {% for message in messages %}
+            <li>{{ message }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+        {% endwith %}
+        <br/>
+        <form method='POST' action='/login'>
+            <input type='hidden' name='csrf_token' value="{{ csrf_token() }}" />
+           <br/><label for='email'>{{ form.email.label }}</label>
+            {{ form.email }}
+            <br/><br/>
+            <label for='passphrase'>{{ form.passphrase.label }}</label>
+            {{ form.passphrase }}
+            <br/><br/>
+            {{ form.submit(class="button-primary") }}
+        </form>
+        <br/><br/>
+        <a href='/forgot'>Forgot</a>&nbsp;&nbsp;&nbsp;<a href='/newaccount'>Join</a>
+    </div>
+</body>
+</html>
