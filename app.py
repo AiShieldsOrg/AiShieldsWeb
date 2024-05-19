@@ -47,6 +47,14 @@ smtp_port = str(decStandard(smtpport))
 smtp_p = str(decStandard(smtpp))
 smtp_u = str(decStandard(smtpu))
 db = SQLAlchemy(app)
+csrf = CSRFProtect(app)
+handler = RotatingFileHandler('/users/youraccount/documents/aishields.log', maxBytes=10000000, backupCount=5)
+handler.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+app.logger.addHandler(handler)
+app.logger.setLevel(logging.DEBUG)
+
 apis = [{"APIowner":"OpenAI","TextGen": {"Name":"ChatGPT","Models":[
                 {"Name":"GPT 4","details":{ "uri": "https://api.openai.com/v1/chat/completions","jsonv":"gpt-4"}},
                 {"Name":"GPT 4 Turbo Preview","details":{ "uri": "https://api.openai.com/v1/chat/completions","jsonv":"gpt-4-turbo-preview" }},
@@ -322,6 +330,11 @@ def mac_for_ip(ip):
 
 @app.before_request
 def before_request():
+  try:
+    public_routes = ['login', 'newaccount', 'forgot', 'verifyemail', 'static','reset']
+    if 'logged_in' not in session and request.endpoint not in public_routes:
+            return redirect(url_for('login'))
+        
     # Save the request data for MDOS protection
     macAddress = mac_for_ip(request.remote_addr)
     if macAddress is None:
@@ -332,7 +345,7 @@ def before_request():
     )
     db.session.add(client_info)
     db.session.commit()
-    db.session.flush()
+    db.session.flush(objects[client_info])
     request_data = RequestLog(
         client_id=client_info.id, 
         client_ip=client_info.IPaddress, 
@@ -343,6 +356,7 @@ def before_request():
     )
     db.session.add(request_data)
     db.session.commit()
+    db.session.flush(objects[request_data])
 
     # MDOS (Model Denial of Service entrypoint)
     # James Yu can add code here to handle MDOS protection
@@ -353,38 +367,170 @@ def before_request():
         flash('Too many requests, please try again later', 'danger')
         print(request_count)
         abort(429)  # Too Many Requests status code
+  except Exception as err:
+    logging.error('An error occurred during login: %s', err)
+    flash("An error occurred. Please try again.")
+    return render_template('login.html', form=LoginForm())
+
     
 @app.route("/",methods=['GET','POST'])
 def home():
-    return redirect(url_for('index'))
+    try:
+        return render_template('index.html')
+    except Exception as err:
+        logging.error('An error occurred during home request: %s', err)
+        flash("An error occurred. Please try again.")
+        return render_template('index.html')
 
-@app.route("/index",methods=['GET','POST'])
+
+@app.route('/index', methods=['GET', 'POST'])
 def index():
     try:
-        if request.method == 'GET':
-            return render_template('index.html',apis=apis, email=request.form.get("email"))
         if request.method == 'POST':
-            #,
-                #{"model": "GPT 3.5 Turbo Instruct", "uri": "https://api.anthropic.com/v1/messages","jsonv":"gpt-3.5-turbo-instruct"},
-                #{"model": "Babbage 2", "uri": "https://api.anthropic.com/v1/messages","jsonv":"babbage-002" },
-                #{"model": "DaVinci 2","uri":"https://api.anthropic.com/v1/messages","jsonv": "davinci-002"},
-            email = (
+        
+                email = request.form.get('email')
+                if email is not None:
+                    email = str(email).lower().strip(" ")
+                    user = (
+                            db.session.query(User)
+                            .filter(User.email == str(request.form.get("email")).lower(),User.user_verified == 1)
+                            .first()
+                        ) 
+                    if (user is not None and user.user_verified > 0):
+                        form = LoginForm(email=str(user.email),passphrase='')
+                        return render_template('login.html',form=form)
+                    else:
+                        return render_template('newaccount.html', email=email)
+                else:
+                    flash("Please enter a valid email address.")
+        
+        else:
+            return render_template('index.html')
+    except Exception as err:
+        logging.error('An error occurred in index request: %s', err)
+        flash("An error occurred. Please try again. " +str(err))
+        return render_template('index.html')
+
+@app.route('/verifyemail',methods=['GET', 'POST'])
+def verifyemail():
+    try:
+        if request.method == 'GET':
+            return render_template('verifyemail.html', email=request.form.get(key='email'))
+        if request.method == 'POST':
+            user_entered_code = str(request.form.get(key='passphrase'))
+            usercodes = (db.session.query(UserCode).all)
+            user_stored_code = (db.session.query(UserCode).filter(UserCode.email == str(request.form.get(key="email")).lower()).order_by(desc(UserCode.id)).first()) 
+            user_code = str(user_stored_code.code)
+            if user_code is not None:
+                if user_code == user_entered_code:
+                    user = (
+                        db.session.query(User)
+                        .filter(User.email == str(request.form["email"]).lower())
+                        .order_by(desc(User.id)).first()
+                    )
+                    user.user_verified = 1
+                    db.session.add(user)
+                    db.session.commit()
+                    db.session.flush(objects=[user])
+                    userName = str(user.first_name + " " + user.last_name)
+                    return render_template('chat.html', email=request.form.get("email"),username=userName,apis=apis)
+                else:
+                    flash("Code did not match, please try entering the code again")
+                    return render_template('verifyemail.html', email=request.form.get("email"))
+            flash("Please enter the code from your email")
+            return render_template('verifyemail.html', email=request.form.get("email"))
+        return render_template('verifyemail.html', email=request.form.get("email"))
+    except Exception as err:
+        logging.error('An error occurred during verify login request: %s',str(err))
+        flash("An error occurred. Please try again: " + str(err))
+        return render_template('login.html', form=LoginForm())  
+ 
+@app.route('/reset',methods=['GET','POST'])
+def reset():
+    try:
+        if request.method == 'GET':
+            strCode = request.query_string.decode('utf-8').split(str('='))[1]
+            return render_template('reset.html',code=strCode)
+        if request.method == 'POST':
+            code = str(request.form.get("code"))
+            usercode = (
+                db.session.query(UserCode)
+                .filter(UserCode.code == code)
+                .one_or_none()
+            )
+            if usercode is not None:
+                user = (db.session.query(User).filter(User.id == usercode.user_id)
+                        .one_or_none())
+                user.passphrase = str(getHash(request.form.get(key="passphrase")))
+                db.session.add(user)
+                db.session.commit()
+                db.session.flush(objects=[user])
+                to_email = user.email
+                from_email = smtp_u
+                s_server = smtp_server
+                s_port = smtp_port
+                s_p = smtp_p
+                m_subj = "Your password was just reset for AiShields.org"
+                m_message = "Dear " + user.first_name + ", \n\n Your password was just changed for AiShields. \n\nPlease contact us via email at support@aishields.org if you did not just change your password. \n\n Thank you, \n\n Support@AiShields.org"
+                send_secure_email(to_email,from_email,s_server,s_port,from_email,s_p,m_subj,m_message)
+                flash("Your password has been changed")
+                #now delete the code
+                db.session.delete(usercode)
+                db.session.commit()
+                db.session.flush(objects=[usercode])
+                #strCode = request.query_string.decode('utf-8').split('=')[1]
+                return render_template('reset.html',code=code)
+            else:
+                flash("Something went wrong please try again.")
+                #strCode = request.query_string.decode('utf-8').split('=')[1]
+                return render_template('reset.html',code=code)
+    except Exception as err:
+        logging.error('An error occurred during during reset request: %s', err)
+        flash("An error occurred." + str(err) +" Please try again.")
+        strCode = request.query_string.decode('utf-8').split(str('='))[1]
+        return render_template('reset.html',code=strCode)
+
+@app.route('/forgot',methods=['GET','POST'])
+def forgot():
+    try:
+        if request.method == 'GET':
+            return render_template('forgot.html')
+        if request.method == 'POST':
+            email = str(request.form.get("email")).lower()
+            
+            user = (
                 db.session.query(User)
-                .filter(User.email == str(request.form.get('email')).lower(),User.user_verified==1).order_by(desc(User.id))
+                .filter(User.email == email,User.user_verified == 1)
                 .first()
             )
-            if email is None:
-                flash("Please create an account")
-                return render_template('newaccount.html',apis=apis, email=request.form.get("email"))
+            if user is not None:
+                if user.user_verified == 1:
+                    strCode = str(uuid.uuid4())
+                    code = UserCode(user_id=user.id,email=user.email,code=strCode)
+                    db.session.add(code)
+                    db.session.commit()
+                    db.session.flush(objects=[code])
+                    to_email = user.email
+                    from_email = smtp_u
+                    s_server = smtp_server
+                    s_port = smtp_port
+                    s_p = smtp_p
+                    m_subj = "Reset instructions for AiShields.org"
+                    m_message = "Dear " + user.first_name + ", \n\n Please click this link: <a href='https://dev.aishields.org/reset?code=" + strCode +"' or paste it into your browser address bar to change your password. \n\nThis link will expire in 20 minutes. \n\n Thank you, \n\n Support@AiShields.org"
+                    send_secure_email(to_email,from_email,s_server,s_port,from_email,s_p,m_subj,m_message)
+                    flash("An email was sent with a link to reset your password.")
+                    return render_template('forgot.html')
+    
             else:
-                # user = User(username="", email=str(request.form["email"]).lower(),user_verified=0,created_date=datetime.datetime.now(datetime.timezone.utc))
-                # db.session.add(user)
-                # db.session.commit()
-                return render_template('login.html',apis=apis, email=request.form.get("email"))
+                flash("We could not find an account in our system with the email you entered")
+                return render_template('forgot.html')
+    
     except Exception as err:
-        print('An error occured: ' + str(err))  
-        return render_template('index.html',apis=apis, email=request.form.get("email"))
-     
+        logging.error('An error occured during forgot request: ' + str(err))
+        flash("An error occurred." + str(err) +" Please try again.")
+        return render_template('forgot.html')
+    
+             
 @app.route('/newaccount',methods=['GET','POST'])
 def newaccount():
     try:
@@ -435,312 +581,189 @@ def newaccount():
                 flash("You must be 18 years or older to create an account.")
                 return render_template("newaccount.html",apis=apis, email=request.form.get(email))
         else:
-            return render_template("login.html")
+            return render_template("login.html",form=LoginForm())
     except Exception as err:
-        print('An error occured: ' + str(err))
+        logging.error('An error occurred during newaccount request: %s', err)
+        flash("An error occurred. Please try again.")
+        return render_template('login.html', form=LoginForm())
 
+@app.route('/profile', methods=['GET', 'POST'])
+def profile():
+    try:
+        if request.method == 'GET':
+            email = session['email']
+            if email:
+                user = db.session.query(User).filter(User.email == email, User.user_verified==1).one_or_none()
+                if user:
+                    return render_template('profile.html', email=user.email, firstname=user.first_name, lastname=user.last_name)
+            return render_template('login.html')
+        if request.method == 'POST':
+            email = request.form.get("email").lower()
+            user = db.session.query(User).filter(User.email == email, User.user_verified == 1).one_or_none()
+            if user:
+                firstname = sanitize_input(request.form["firstname"].strip())
+                lastname = sanitize_input(request.form["lastname"].strip())
+                user.first_name = firstname
+                user.last_name = lastname
+                user.passphrase = getHash(request.form['passphrase'])
+                db.session.commit()
+                flash("Profile updated successfully")
+                return render_template('profile.html', email=user.email, firstname=user.first_name, lastname=user.last_name)
+            flash("Something went wrong. Please try again later.")
+            return render_template('profile.html', email=email)
+    except Exception as err:
+        logging.error('An error occurred during profile request: %s', err)
+        flash("An error occurred. Please try again.")
+        return render_template('login.html', form=LoginForm())
 
-@app.route('/login',methods=['GET', 'POST'])
+@app.route('/login', methods=['GET', 'POST'])
 def login():
     try:
-        if request.method == 'GET':
-            return render_template('login.html', email=request.form.get("email"),username=request.form.get("username"))
-        if request.method == 'POST':
-            user_entered_code = getHash(str(request.form["passphrase"]))
-            user =  (db.session.query(User)
-                .filter(User.email == str(request.form["email"]).lower(), User.passphrase==str(user_entered_code),User.user_verified==1).order_by(desc(User.created_date))
-                .one_or_none()
-                ) 
-            if user is not None:
-                #print(str(user().id))
-                if str(user.passphrase) == user_entered_code:
-                    if int(user.user_verified) == 1:
-                        InputPromptHistory = (db.session.query(InputPrompt).filter(InputPrompt.user_id == user.id))
-                        chathistory = {}
-                        for prmpt in InputPromptHistory:
-                            chathistory[prmpt.internalPromptID]=prmpt.inputPrompt
-                        return render_template('chat.html', InputPromptHistory=chathistory,email=user.email,username=user.first_name + " " + user.last_name,apis=apis,output=False)
-                    else:
-                        strCode = ""
-                        for i in range(6):
-                            strCode += str(secrets.randbelow(10))
-                        user_id = user().id
-                        code = UserCode(user_id=user_id,email=user().email,code=strCode)
-                        db.session.add(code)
-                        db.session.commit()
-                        db.session.flush(objects=[code])
-                        to_email = user().email
-                        from_email = smtp_u
-                        s_server = smtp_server
-                        s_port = smtp_port
-                        s_p = smtp_p
-                        m_subj = "Please verify your email for AiShields.org"
-                        m_message = "Dear " + user().first_name + ", \n\n Please enter the following code: " + strCode + " in the email verification form. \n\n Thank you, \n\n Support@AiShields.org"
-                        send_secure_email(to_email,from_email,s_server,s_port,from_email,s_p,m_subj,m_message)
-                        return render_template('verifyemail.html',apis=apis, email=user().email,username=user().first_name + " " + user().last_name)
-                else:
-                    flash("The username and password combination you used did not match our records")
-                    return render_template('login.html')
-            else:
-                return render_template('login.html')
-    except Exception as err:
-        print('An error occured: ' + str(err))   
-        
-@app.route('/verifyemail',methods=['GET', 'POST'])
-def verifyemail():
-    try:
-        if request.method == 'GET':
-            return render_template('verifyemail.html', email=request.form.get(key='email'))
-        if request.method == 'POST':
-            user_entered_code = str(request.form.get(key='passphrase'))
-            usercodes = (db.session.query(UserCode).all)
-            user_stored_code = (db.session.query(UserCode).filter(UserCode.email == str(request.form.get(key="email")).lower()).order_by(desc(UserCode.id)).first()) 
-            user_code = str(user_stored_code.code)
-            if user_code is not None:
-                if user_code == user_entered_code:
-                    user = (
-                        db.session.query(User)
-                        .filter(User.email == str(request.form["email"]).lower())
-                        .order_by(desc(User.id)).first()
-                    )
-                    user.user_verified = 1
-                    db.session.add(user)
-                    db.session.commit()
-                    db.session.flush(objects=[user])
-                    userName = str(user.first_name + " " + user.last_name)
-                    return render_template('chat.html', email=request.form.get("email"),username=userName,apis=apis)
-                else:
-                    flash("Code did not match, please try entering the code again")
-                    return render_template('verifyemail.html', email=request.form.get("email"))
-            flash("Please enter the code from your email")
-            return render_template('verifyemail.html', email=request.form.get("email"))
-        return render_template('verifyemail.html', email=request.form.get("email"))
-    except Exception as err:
-        print('An error occured: ' + str(err))  
- 
-@app.route('/reset',methods=['GET','POST'])
-def reset():
-    try:
-        if request.method == 'GET':
-            strCode = request.query_string.decode('utf-8').split('=')[1]
-            return render_template('reset.html',code=strCode)
-        if request.method == 'POST':
-            code = str(request.form.get("code"))
-            usercode = (
-                db.session.query(UserCode)
-                .filter(UserCode.code == code)
-                .one_or_none()
-            )
-            if usercode is not None:
-                user = (db.session.query(User).filter(User.id == usercode.user_id)
-                        .one_or_none())
-                user.passphrase = str(getHash(request.form.get(key="passphrase")))
-                db.session.add(user)
-                db.session.commit()
-                db.session.flush(objects=[user])
-                to_email = user.email
-                from_email = smtp_u
-                s_server = smtp_server
-                s_port = smtp_port
-                s_p = smtp_p
-                m_subj = "Your password was just reset for AiShields.org"
-                m_message = "Dear " + user.first_name + ", \n\n Your password was just changed for AiShields. \n\nPlease contact us via email at support@aishields.org if you did not just change your password. \n\n Thank you, \n\n Support@AiShields.org"
-                send_secure_email(to_email,from_email,s_server,s_port,from_email,s_p,m_subj,m_message)
-                flash("Your password has been changed")
-                return render_template('login.html')
-            else:
-                return render_template("login.html")
-        else:
-            return render_template("login.html")
-    except Exception as err:
-        print('An error occured: ' + str(err))
-        return render_template("login.html")
+        form = LoginForm()
+        if request.method == "GET":
+             return render_template('login.html', form=LoginForm())
+        if form.validate_on_submit():
+            try:
+                email = form.email.data.lower()
+                passphrase = getHash(form.passphrase.data)
+                user = (db.session.query(User).filter(
+                    User.email == email, 
+                    User.passphrase == passphrase, 
+                    User.user_verified == 1
+                ).first())
 
-@app.route('/forgot',methods=['GET','POST'])
-def forgot():
-    try:
-        if request.method == 'GET':
-            return render_template('forgot.html')
-        if request.method == 'POST':
-            email = str(request.form.get("email")).lower()
-            
-            user = (
-                db.session.query(User)
-                .filter(User.email == email,User.user_verified == 1)
-                .one_or_none()
-            )
-            if user is not None:
-                if user.user_verified == 1:
-                    strCode = str(uuid.uuid4())
-                    code = UserCode(user_id=user.id,email=user.email,code=strCode)
-                    db.session.add(code)
-                    db.session.commit()
-                    db.session.flush(objects=[code])
-                    to_email = user.email
-                    from_email = smtp_u
-                    s_server = smtp_server
-                    s_port = smtp_port
-                    s_p = smtp_p
-                    m_subj = "Please reset your email for AiShields.org"
-                    m_message = "Dear " + user.first_name + ", \n\n Please click this link: <a href='https://dev.aishields.org/reset?code=" + strCode +"' or paste it into your browser address bar to change your password. \n\nThis link will expire in 20 minutes. \n\n Thank you, \n\n Support@AiShields.org"
-                    send_secure_email(to_email,from_email,s_server,s_port,from_email,s_p,m_subj,m_message)
-                    return render_template('login.html')
-            else:
-                return render_template("login.html")
-        else:
-            return render_template("login.html")
+                if user is not None:
+                    session['logged_in'] = True
+                    session['user_id'] = user.id
+                    session['email'] = user.email
+                    session['username'] = f"{user.first_name} {user.last_name}"
+                    InputPromptHistory = (db.session.query(InputPrompt).filter(InputPrompt.user_id == user.id))
+                    chathistory = {}
+                    for prmpt in InputPromptHistory:
+                        chathistory[prmpt.internalPromptID]=prmpt.inputPrompt
+                    return render_template('chat.html', InputPromptHistory=chathistory,email=user.email,username=user.first_name + " " + user.last_name,apis=apis,output=False,Logged_in=True)   
+                else:
+                    flash("Invalid email or password")
+                    return render_template('login.html', form=LoginForm())
+ 
+            except Exception as err:
+                logging.error('An error occurred during login: %s', err)
+                flash("An error occurred. Please try again.")
+                return render_template('login.html', form=LoginForm())
+
     except Exception as err:
-        print('An error occured: ' + str(err))
-        return render_template("login.html")
-        
+        logging.error('An error occurred during login: %s', err)
+        flash("An error occurred. Please try again.")
+        return render_template('login.html', form=LoginForm())
+ 
+
+@app.route('/logout')
+def logout():
+    try:
+        session.clear()
+        flash("You have been logged out.")
+        form = LoginForm()
+        return render_template('login.html',form=form)
+    except Exception as err:
+        logging.error('An error occurred during logout: %s', err)
+        flash("An error occurred. Please try again.")
+        return render_template('login.html', form=LoginForm())
+    
+
 @app.route('/chat', methods=['GET', 'POST'])
 def chat():
     try:
+        if not session.get('logged_in'):
+            return render_template('login',form=LoginForm())
+
+        user = (db.session.query(User).filter(User.email == session['email']).first())
+        InputPromptHistory = (db.session.query(InputPrompt).filter(InputPrompt.user_id == user.id))
+        chathistory = {prmpt.internalPromptID: prmpt.inputPrompt for prmpt in InputPromptHistory}                           
         if request.method == 'GET':
-            if request.query_string is not None:
-                email = request.form.get(key="email")
-                user = (
-                        db.session.query(User)
-                        .filter(User.email == str(email).lower(),User.user_verified == 1)
-                        .one_or_none()
-                    )
-                if user is not None:
-                    if str(request.query_string).startswith("?chat="):
-                        chatId = request.query_string.split("=")[1]
-                    #now get all the data to repopulate the form/page data elements
-                        rawInput = (db.session.query(InputPrompt).filter(InputPrompt.internalPromptID==str(chatId),InputPrompt.user_id == user.id).one_or_none)
-                    if rawInput is not None:
-                        preprocPrompt = (db.session.query(PreProcInputPrompt).filter(PreProcInputPrompt.internalPromptID==str(chatId)).one_or_none)
-                        if preprocPrompt is not None:
-                            postProcResp = (db.session.query(PostProcResponse).filter(PostProcResponse.inputPromptID==str(chatId)).one_or_none)
-                            if postProcResp is not None:
-                                aiShieldsReport = (db.session.query(AiShieldsReport).filter(AiShieldsReport.internalPromptID==str(chatId)).one_or_none)
-                                if aiShieldsReport is not None:
-                                    rawInputStr = rawInput().inputPrompt
-                                    preprocPromptStr = preprocPrompt().preProcInputPrompt
-                                    apiResponse = (db.session.query(ApiResponse).filter(ApiResponse.internalPromptID==str(chatId)).one_or_none)
-                                    if apiResponse is not None:
-                                        rawOutputStr = apiResponse().rawoutput
-                                        postProcRespStr = postProcResp().postProcOutputResponse
-                                        findings = [{"category":"Sensitive Data","details":aiShieldsReportObj.SensitiveDataSanitizerReport,"id":aiShieldsReportObj.internalPromptID},
-                                            { "category":"Prompt Injection","details":aiShieldsReportObj.PromptInjectionReport,"id":aiShieldsReportObj.internalPromptID},
-                                            {"category":"Overreliance","details":aiShieldsReportObj.OverrelianceReport,"id":aiShieldsReportObj.internalPromptID},
-                                            {"category":"MDOS","details":aiShieldsReportObj.MDOSReport,"id":aiShieldsReportObj.internalPromptID},
-                                            {"category":"Insecure Output Handling","details":aiShieldsReportObj.InsecureOutputReportHandling,"id":aiShieldsReportObj.internalPromptID}]
-                                        InputPromptHistory = (db.session.query(InputPrompt).filter(InputPrompt.user_id == rawInput().user_id))
-                                        chathistory = {}
-                                        for prmpt in InputPromptHistory:
-                                            chathistory[prmpt.internalPromptID]=prmpt.inputPrompt
-                                        return render_template('chat.html',rawInput=rawInputStr,rawOutput=rawOutputStr,preProcStr=preprocPromptStr,InputPromptHistory=chathistory,PostProcResponseHistory="",apis=apis,email=email,username=rawInput().username,response=postProcResp().postProcOutputResponse,findings=findings,output=True)
-                                return render_template('chat.html',apis=apis,email=request.form["email"],username=user().username,InputPromptHistory={})
-                            return render_template('chat.html',apis=apis,email=request.form["email"],username=user.username,InputPromptHistory={})
-                        return render_template('chat.html',apis=apis,email=request.form["email"],username=user.username,InputPromptHistory={})
-                    return render_template('chat.html',apis=apis,email=request.form["email"],username=user.username,InputPromptHistory={})
-            elif request.form.get(key="email") is not None:
-                #return render_template('chat.html',apis=apis,email=request.form["email"],username=user.username) 
-                email = request.form.get(key="email")
-                user = (
-                        db.session.query(User)
-                        .filter(User.email == str(email).lower(),User.user_verified == 1)
-                        .one_or_none()
-                    )
-                if user is not None:
-                    return render_template('chat.html',apis=apis,email=request.form["email"],username=user.username,InputPromptHistory={})    
+            if request.query_string is not None and request.query_string != "" and request.query_string.index(str("=").encode()) >0 and len(request.query_string.split('=')) >1:
+                chatId = request.query_string.decode('utf-8').split('=')[1]
+                rawInput = (db.session.query(InputPrompt).filter(InputPrompt.internalPromptID == str(chatId), InputPrompt.user_id == user.id).one_or_none())
+                if rawInput is not None:
+                    preprocPrompt = (db.session.query(PreProcInputPrompt).filter(PreProcInputPrompt.internalPromptID == str(chatId)).one_or_none())
+                    if preprocPrompt:
+                        postProcResp = (db.session.query(PostProcResponse).filter(PostProcResponse.inputPromptID == str(chatId)).one_or_none())
+                        if postProcResp:
+                            aiShieldsReport = (db.session.query(AiShieldsReport).filter(AiShieldsReport.internalPromptID == str(chatId)).one_or_none())
+                            if aiShieldsReport:
+                                rawInputStr = rawInput.inputPrompt
+                                preprocPromptStr = preprocPrompt.preProcInputPrompt
+                                apiResponse = (db.session.query(ApiResponse).filter(ApiResponse.internalPromptID == str(chatId)).one_or_none())
+                                if apiResponse:
+                                    rawOutputStr = apiResponse.rawoutput
+                                    postProcRespStr = postProcResp.postProcOutputResponse
+                                    findings = [
+                                        {"category": "Sensitive Data", "details": aiShieldsReport.SensitiveDataSanitizerReport, "id": aiShieldsReport.internalPromptID},
+                                        {"category": "Prompt Injection", "details": aiShieldsReport.PromptInjectionReport, "id": aiShieldsReport.internalPromptID},
+                                        {"category": "Overreliance", "details": aiShieldsReport.OverrelianceReport, "id": aiShieldsReport.internalPromptID},
+                                        {"category": "Insecure Output Handling", "details": aiShieldsReport.InsecureOutputReportHandling, "id": aiShieldsReport.internalPromptID}
+                                    ]
+                                    return render_template('chat.html', rawInput=rawInput.inputPrompt, preProcStr=preprocPrompt.preProcInputPrompt, rawResponse=rawOutputStr, InputPromptHistory=chathistory, PostProcResponseHistory=postProcRespStr, apis=apis, email=session['email'], username=session['username'], response=postProcRespStr, findings=findings, output=True, logged_in=True)
+                return render_template('chat.html', apis=apis, email=session['email'], username=session['username'], InputPromptHistory=chathistory, logged_in=True)
+            elif session.get['logged_in']:
+                return render_template('chat.html', apis=apis, email=session['email'], username=session['username'], InputPromptHistory=chathistory, logged_in=True)
             else:
-                return render_template('newaccount.html',apis=apis,email=request.form["email"])
-            return render_template('chat.html',apis=apis,email=request.form["email"],username=user.username,InputPromptHistory={})
+                return render_template('login.html', form=LoginForm())
         elif request.method == 'POST':
-            #if protect(request):
-            message = ""
-            api = ""
-            if request.form['api'] is not None:
-                api = request.form['api']
-            else:
-                flash("Please select an api and model from the list")
-                return render_template('chat.html',apis=apis, username=username,email=email)
-            token = ""
-            if request.form['apitoken'] is not None:
-                token = request.form['apitoken']
-            else:
-                flash("Please enter an api token for the api you select")
-                return render_template('chat.html',apis=apis, username=username,email=email)
-            #securely store cred:
+            if not session.get('logged_in'):
+                form = LoginForm()
+                return render_template('login',form=form)
+            api = request.form.get('api')
+            token = request.form.get('apitoken')
+            username = session.get('username')
+            email = session.get('email')
+            inputprompt = request.form.get('inputprompt')
+            user = (db.session.query(User).filter(User.email == email.lower(), User.user_verified == 1).order_by(desc(User.id)).first())
+            if user is None:
+                form = LoginForm()
+                return render_template('login',form=form)
+            userid = user.id if user else ""
+            storetoken = request.form.get('storetoken', 'No')
+
+            if not api or not token or not inputprompt or not username or not email:
+                flash("Please fill out all required fields.")
+                return render_template('chat.html', apis=apis, username=username, email=email, logged_in=True)
+
             strEncToken = encStandard(token)
-            token = ""
-            username = ""
-            if request.form['username'] is not None:
-                username = str(request.form['username'])
-            email = ""
-            if request.form['email'] is not None:
-                email = str(request.form['email']).lower()
-            inputprompt = ""
-            if request.form['inputprompt'] is not None:
-                inputprompt = request.form['inputprompt']
-            else:
-                flash("Please enter a prompt message to send to the api you select")
-                return render_template('chat.html',apis=apis, username=username,email=email)
-            user = (
-                db.session.query(User)
-                .filter(User.email == str(email).lower(),User.user_verified ==1).order_by(desc(User.id))
-                .first()
-            )
-            userid = ""
-            if user is not None:
-                userid = user.id
-            else:
-                message = "Please enter your email"
-                return render_template('chat.html',apis=apis, username=username,email=email)
-            storetoken = "No"
-            if request.form['storetoken'] is not None:
-                storetoken = request.form['storetoken']
-            if storetoken == "Yes":
-                cred = Credential(user_id=userid,username=str(username).upper(),email=str(email).lower(),token=strEncToken)
-                db.session.add(cred)
-            #preprocess the prompt
             internalID = str(uuid.uuid4())
             lstApi = str(api).split(' ')
             strApi = lstApi[0]
             strModel = lstApi[1]
-            rawInput = InputPrompt(internalPromptID=internalID,user_id=userid,username=username,email=email,api=api,inputPrompt=inputprompt)
+
+            rawInput = InputPrompt(internalPromptID=internalID, user_id=userid, username=username, email=email, api=api, inputPrompt=inputprompt)
             db.session.add(rawInput)
             db.session.commit()
             db.session.flush(objects=[rawInput])
-            rawInputObj = (
-                db.session.query(InputPrompt)
-                .filter(InputPrompt.internalPromptID == internalID)
-                .one_or_none)
-            apiObj = (
-                db.session.query(GenApi)
-                .filter(GenApi.model == str(strModel),GenApi.api_owner == strApi)
-                .one_or_none)
-            strRole = "user"
-            if request.form['role'] is not None:
-                strRole = request.form['role']
+            rawInputObj = db.session.query(InputPrompt).filter(InputPrompt.internalPromptID == internalID).one_or_none()
+
+            apiObj = db.session.query(GenApi).filter(GenApi.model == str(strModel), GenApi.api_owner == strApi).one_or_none()
+            strRole = request.form.get('role', 'user')
+
             if apiObj:
                 preprocessedPromptString = aishields_sanitize_input(rawInput)
-                prompt_injection_scores = prompt_injection_score(rawInput.inputPrompt)
                 preprocessedPrompt = PreProcInputPrompt(
                     internalPromptID=internalID,
                     user_id=userid,
-                    api_id=apiObj().id,
-                    api=apiObj().uri,
+                    api_id=apiObj.id,
+                    api=apiObj.uri,
                     email=email,
-                    rawInputPrompt_id=rawInputObj().id,
+                    rawInputPrompt_id=rawInputObj.id,
                     inputPrompt=rawInput.inputPrompt,
                     preProcInputPrompt=preprocessedPromptString,
                     username=username,
-
-                    SensitiveDataSanitizerReport =  str(preprocessedPromptString),
-                    PromptInjectionReport = "The model is " + str(prompt_injection_scores["jailbreak_score"] * 100) + " percent confident there is a jailbreak, and " + str(prompt_injection_scores["malicious_request_score"] * 100) + " percent confident there is a malicious request",
-                    OverrelianceReport = "",
-                    OverrelianceKeyphraseData = ""
+                    SensitiveDataSanitizerReport=str(preprocessedPromptString),
+                    PromptInjectionReport="",
+                    OverrelianceReport="",
+                    OverrelianceKeyphraseData=""
                 )
-                #preprocessedPrompt = aishields_overreliance_inputfunc(rawInput,preprocessedPrompt)
-                #=== ===
-                
                 db.session.add(preprocessedPrompt)
                 db.session.commit()
                 db.session.flush(objects=[preprocessedPrompt])
+
                 strTempApiKey = str(decStandard(str(strEncToken)))
                 client = openai.Client(api_key=str(strTempApiKey))
                 stream = client.chat.completions.create(
@@ -752,113 +775,87 @@ def chat():
                 for chunk in stream:
                     if chunk.choices[0].delta.content is not None:
                         strRawOutput += chunk.choices[0].delta.content
+
                 rawOutput = ApiResponse(
                     internalPromptID=internalID,
                     user_id=userid,
-                    api_id=apiObj().id,
-                    api=apiObj().uri,
+                    api_id=apiObj.id,
+                    api=apiObj.uri,
                     email=email,
                     preProcPrompt_id=preprocessedPrompt.id,
                     rawInputPrompt_id=rawInput.id,
                     rawoutput=strRawOutput,
                     externalPromptID="",
                     username=username,
-                    )
+                )
                 db.session.add(rawOutput)
                 db.session.commit()
                 db.session.flush(objects=[rawOutput])
-                rawOutputObj = (
-                    db.session.query(ApiResponse)
-                        .filter(ApiResponse.internalPromptID == internalID)
-                        .one_or_none)
-                preProcObj = (
-                    db.session.query(PreProcInputPrompt)
-                        .filter(PreProcInputPrompt.internalPromptID == internalID)
-                        .one_or_none)
+                rawOutputObj = db.session.query(ApiResponse).filter(ApiResponse.internalPromptID == internalID).one_or_none()
+                preProcObj = db.session.query(PreProcInputPrompt).filter(PreProcInputPrompt.internalPromptID == internalID).one_or_none()
                 postProcPromptObj = PostProcResponse(
-                    rawInputPrompt_id = rawInputObj().id,
-                    inputPromptID = internalID,
-                    preProcPrompt_id = preProcObj().id,
-                    externalPromptID = rawOutput.externalPromptID,
-                    user_id = userid,
-                    username = username,
-                    email = email,
-                    api_id = apiObj().id,
-                    api = apiObj().uri,
-                    rawResponseID = rawOutputObj().id,
-                    rawOutputResponse = rawOutputObj().rawoutput,
-                    postProcOutputResponse = "",
-                    InsecureOutputHandlingReport = "",
-                    created_date = datetime.datetime.now(datetime.timezone.utc)
+                    rawInputPrompt_id=rawInputObj.id,
+                    inputPromptID=internalID,
+                    preProcPrompt_id=preProcObj.id,
+                    externalPromptID=rawOutput.externalPromptID,
+                    user_id=userid,
+                    username=username,
+                    email=email,
+                    api_id=apiObj.id,
+                    api=apiObj.uri,
+                    rawResponseID=rawOutputObj.id,
+                    rawOutputResponse=rawOutputObj.rawoutput,
+                    postProcOutputResponse="",
+                    InsecureOutputHandlingReport="",
+                    created_date=datetime.datetime.now(datetime.timezone.utc)
                 )
                 postProcPromptObj = aishields_postprocess_output(postProcPromptObj)
-                #preprocessedPrompt = aishields_overreliance_postProc(rawInput,preprocessedPrompt,postProcPromptObj,rawInput)
-                
+                preprocessedPrompt = aishields_overreliance_postProc(rawInput, preprocessedPrompt, postProcPromptObj, rawInput)
                 db.session.add(postProcPromptObj)
                 db.session.commit()
                 db.session.flush(objects=[postProcPromptObj])
-                postProcRespObj = (
-                    db.session.query(PostProcResponse)
-                        .filter(PostProcResponse.inputPromptID == internalID)
-                        .one_or_none)
-                postProcID = -1
-                if postProcRespObj is not None:
-                    postProcID = postProcRespObj().id 
-                # prepare report
-                overRelianceReport = ""
-                if preprocessedPrompt is not None:
-                    if preprocessedPrompt.OverrelianceReport is not None:
-                        overRelianceReport = preprocessedPrompt.OverrelianceReport
-                mdosReport = getMDOSreport(rawInput)
-                
-                print("rawInput: " + rawInput.inputPrompt)
-                print("MDOS Report: " + str(mdosReport))
-                print("overRelianceReport: " + overRelianceReport)
+
                 aiShieldsReportObj = AiShieldsReport(
-                    rawInputPrompt_id = rawInputObj().id,
-                    internalPromptID = internalID,
-                    preProcPrompt_id = preProcObj().id,
-                    externalPromptID = rawOutput.externalPromptID,
-                    user_id = userid,
-                    username = username,
-                    email = email,
-                    api_id = apiObj().id,
-                    api = apiObj().uri,
-                    rawResponse_id = rawOutputObj().id,
-                    #rawOutputResponse = rawOutputObj().rawoutput,
-                    #postProcOutputResponse = postProcRespObj().postProcOutputResponse,    
-                    created_date = datetime.datetime.now(datetime.timezone.utc),
-                    postProcResponse_id = postProcRespObj().id,
-                    SensitiveDataSanitizerReport = preProcObj().SensitiveDataSanitizerReport,
-                    PromptInjectionReport = preProcObj().PromptInjectionReport,    
-                    OverrelianceReport = preProcObj().OverrelianceReport,
-                    InsecureOutputReportHandling = postProcRespObj().InsecureOutputHandlingReport,     
-                    MDOSreport = mdosReport,
-                    updated_date = datetime.datetime.now(datetime.timezone.utc)
+                    rawInputPrompt_id=rawInputObj.id,
+                    internalPromptID=internalID,
+                    preProcPrompt_id=preProcObj.id,
+                    externalPromptID=rawOutput.externalPromptID,
+                    user_id=userid,
+                    username=username,
+                    email=email,
+                    api_id=apiObj.id,
+                    api=apiObj.uri,
+                    rawResponse_id=rawOutputObj.id,
+                    postProcResponse_id=postProcPromptObj.id,
+                    SensitiveDataSanitizerReport=preProcObj.SensitiveDataSanitizerReport,
+                    PromptInjectionReport=preProcObj.PromptInjectionReport,
+                    OverrelianceReport=preProcObj.OverrelianceReport,
+                    InsecureOutputReportHandling=postProcPromptObj.InsecureOutputHandlingReport,
+                    MDOSreport=getMDOSreport(rawInputObj),
+                    created_date=datetime.datetime.now(datetime.timezone.utc),
+                    updated_date=datetime.datetime.now(datetime.timezone.utc)
                 )
                 db.session.add(aiShieldsReportObj)
                 db.session.commit()
                 db.session.flush(objects=[aiShieldsReportObj])
-                findings = [{"category":"Sensitive Data","details":aiShieldsReportObj.SensitiveDataSanitizerReport,"id":aiShieldsReportObj.internalPromptID},
-                { "category":"Prompt Injection","details":aiShieldsReportObj.PromptInjectionReport,"id":aiShieldsReportObj.internalPromptID},
-                {"category":"Overreliance","details":aiShieldsReportObj.OverrelianceReport,"id":aiShieldsReportObj.internalPromptID},
-                {"category":"MDOS","details":aiShieldsReportObj.MDOSreport,"id":aiShieldsReportObj.MDOSreport},
-                {"category":"Insecure Output Handling","details":aiShieldsReportObj.InsecureOutputReportHandling,"id":aiShieldsReportObj.internalPromptID}]
+
+                findings = [
+                    {"category": "Sensitive Data", "details": aiShieldsReportObj.SensitiveDataSanitizerReport, "id": aiShieldsReportObj.internalPromptID},
+                    {"category": "Prompt Injection", "details": aiShieldsReportObj.PromptInjectionReport, "id": aiShieldsReportObj.internalPromptID},
+                    {"category": "Overreliance", "details": aiShieldsReportObj.OverrelianceReport, "id": aiShieldsReportObj.internalPromptID},
+                    {"category": "MDOS", "details": aiShieldsReportObj.MDOSreport, "id": aiShieldsReportObj.MDOSreport},
+                    {"category": "Insecure Output Handling", "details": aiShieldsReportObj.InsecureOutputReportHandling, "id": aiShieldsReportObj.internalPromptID}
+                ]
+
                 InputPromptHistory = (db.session.query(InputPrompt).filter(InputPrompt.user_id == userid).order_by(desc(InputPrompt.created_date)))
-                chathistory = {}
-                #chathistoryReversed = {}
-                for prmpt in InputPromptHistory:
-                    chathistory[prmpt.internalPromptID]=prmpt.inputPrompt
-                #for revprmnt in dict(chathistory).items().__reversed__():
-                    #chathistoryReversed[revprmnt.index] = revprmnt
+                chathistory = {prmpt.internalPromptID: prmpt.inputPrompt for prmpt in InputPromptHistory}
                 PostProcResponseHistory = (db.session.query(PostProcResponse).filter(PostProcResponse.user_id == userid))
-                return render_template('chat.html',rawInput=rawInputObj().inputPrompt,preProcStr=preProcObj().preProcInputPrompt,rawResponse=rawOutputObj().rawoutput,InputPromptHistory=chathistory,PostProcResponseHistory=PostProcResponseHistory,apis=apis,email=email,username=username,response=postProcRespObj().postProcOutputResponse,findings=findings,output=True)
-        else:
-            return render_template('chat.html',InputPromptHistory={},apis=apis,email=email,username=username)
+                return render_template('chat.html', rawInput=rawInputObj.inputPrompt, preProcStr=preProcObj.preProcInputPrompt, rawResponse=rawOutputObj.rawoutput, InputPromptHistory=chathistory, PostProcResponseHistory=PostProcResponseHistory, apis=apis, email=session['email'], username=session['username'], response=postProcPromptObj.postProcOutputResponse, findings=findings, output=True, logged_in=True)
+        return render_template('chat.html', InputPromptHistory=chathistory, apis=apis, email=session['email'], username=session['username'], logged_in=True)
     except Exception as err:
+        logging.error('An error occurred during chat processing: %s', err)
         flash(err)
-        print('An error occured: ' + str(err)) 
-        return render_template('chat.html',apis=apis,email=email,InputPromptHistory={}) 
+        return render_template('login.html', form=LoginForm())
 
 def getMDOSreport(input:InputPrompt):
         #sensitive data sanitization:
@@ -881,41 +878,45 @@ def getMDOSreport(input:InputPrompt):
         }
         return str(result)
     except Exception as err:
-        print('An error occured: ' + str(err)) 
+        logging.error('An error occurred while generating the MDOS report: %s', err)
+        flash(err)
 
 
 def aishields_sanitize_input(input:InputPrompt):
-    #now sanitize for Prompt Injection
-    strPreProcInput = ""
-    strRawInputPrompt = input.inputPrompt
-
-
-
-    #sensitive data sanitization:
-    # now sanitize for privacy protected data
-    sds = SensitiveDataSanitizer()
-    strSensitiveDataSanitized = sds.sanitize_input(input_content=strRawInputPrompt)           
-    
-    
-    strPreProcInput += strRawInputPrompt    
-    
-    #now assess for Overreliance
-    return strPreProcInput
-        #sensitive data sanitization:
-        # now sanitize for privacy protected data
-    try:
-        strPreProcInput = ""
-        strRawInputPrompt = input.inputPrompt
-        sanitizedInput = sanitize_input(strRawInputPrompt)
-        sds = SensitiveDataSanitizer()
-        strSensitiveDataSanitized = sds.sanitize_input(input_content=sanitizedInput)           
-        strPreProcInput += str(strSensitiveDataSanitized)
-        #now sanitize for Prompt Injection
-        #now assess for Overreliance
-        return strPreProcInput
-    except Exception as err:
-        print('An error occured: ' + str(err)) 
-
+      try: #now sanitize for Prompt Injection
+      strPreProcInput = ""
+      strRawInputPrompt = input.inputPrompt
+  
+  
+  
+      #sensitive data sanitization:
+      # now sanitize for privacy protected data
+      sds = SensitiveDataSanitizer()
+      strSensitiveDataSanitized = sds.sanitize_input(input_content=strRawInputPrompt)           
+      
+      
+      strPreProcInput += strRawInputPrompt    
+      
+      #now assess for Overreliance
+      return strPreProcInput
+          #sensitive data sanitization:
+          # now sanitize for privacy protected data
+      try:
+          strPreProcInput = ""
+          strRawInputPrompt = input.inputPrompt
+          sanitizedInput = sanitize_input(strRawInputPrompt)
+          sds = SensitiveDataSanitizer()
+          strSensitiveDataSanitized = sds.sanitize_input(input_content=sanitizedInput)           
+          strPreProcInput += str(strSensitiveDataSanitized)
+          #now sanitize for Prompt Injection
+          #now assess for Overreliance
+          return strPreProcInput
+      except Exception as err:
+          logging.error('An error occurred during input sanitization: %s', err)
+          flash(err) 
+  except Exception as err:
+      logging.error('An error occurred during input sanitization: %s', err)
+      flash(err)
 
 
 def aishields_overreliance_inputfunc(input:InputPrompt, preproc:PreProcInputPrompt):
@@ -935,7 +936,8 @@ def aishields_overreliance_inputfunc(input:InputPrompt, preproc:PreProcInputProm
         #preproc.OverrelianceKeyphraseData = repr(overreliance_keyphrase_data_list)
         return overreliance_keyphrase_data_list
     except Exception as err:
-        print('An error occured: ' + str(err))  
+        logging.error('An error occurred durring overreliance input processing: %s', err)
+        flash(err)  
 
 def aishields_overreliance_postProc(input:ApiResponse,preproc:PreProcInputPrompt, postproc:PostProcResponse,rawinput:InputPrompt):
         #sensitive data sanitization:
@@ -950,11 +952,12 @@ def aishields_overreliance_postProc(input:ApiResponse,preproc:PreProcInputPrompt
         overreliance_keyphrase_data_list = ods.get_keyphrases_and_links(preproc.preProcInputPrompt,NUMBER_OF_SEARCHES,link_number_limit=NUMBER_OF_LINKS, stopword_list=STOPWORD_LIST)
         overreliance_keyphrase_data_list = ods.get_articles(overreliance_keyphrase_data_list,site_ignore_list=SITE_IGNORE_LIST)
         data_summary_list = ods.compare(overreliance_keyphrase_data_list,postproc.rawOutputResponse)
-        overreliance_string = f"score: {data_summary_list[0]['score']} of {data_summary_list[0]['link']}"
+        overreliance_string = str(f"score: {data_summary_list[0]['score']} of {data_summary_list[0]['link']}")
         preproc.OverrelianceReport = overreliance_string
         return preproc
     except Exception as err:
-        print('An error occured: ' + str(err))  
+        logging.error('An error occurred during overreliance output processing: %s', err)
+        flash(err)  
 
 
 def aishields_postprocess_output(postProcResponseObj:PostProcResponse):
@@ -965,12 +968,13 @@ def aishields_postprocess_output(postProcResponseObj:PostProcResponse):
         strPostProcessedOutput, outputSanitizationReport = output_sanitizer.generate_json_report(postProcResponseObj.rawOutputResponse)
         
         postProcResponseObj.postProcOutputResponse = escape(str(strPostProcessedOutput))
-        postProcResponseObj.InsecureOutputHandlingReport = "AiShields Data Sanitizer removed the following from the raw output\n for your safety: \n" + str(escape(aishields_get_string_diff(postProcResponseObj.rawOutputResponse,strPostProcessedOutput)))
+        postProcResponseObj.InsecureOutputHandlingReport = outputSanitizationReport
         #handle and sanitize raw output
         #return post processed Output
         return postProcResponseObj
     except Exception as err:
-        print('An error occured: ' + str(err))  
+        logging.error('An error occurred during post processing: %s', err)
+        flash(err) 
 
 def aishields_store_cred(input:Credential):
     try:
@@ -981,7 +985,20 @@ def aishields_store_cred(input:Credential):
         #return post processed Output
         return True
     except Exception as err:
-        print('An error occured: ' + str(err))  
+        logging.error('An error occurred while attempting to store creds: %s', err)
+        flash(err)
+      
+  
+def aishields_promptInjection_check(input:InputPrompt):
+        #sensitive data sanitization:
+        # now sanitize for privacy protected data
+    try:
+        promptInjectionOutput = {}
+        #now sanitize for Prompt Injection PASS
+        return promptInjectionOutput
+    except Exception as err:
+        logging.error('An error occurred during prompt injection check: %s', err)
+        flash(err)
         
 def aishields_get_string_diff(strA,strB):
     try:
