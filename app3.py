@@ -1,8 +1,6 @@
 from flask import Flask, request, abort,render_template, redirect, url_for, flash
 from flask_wtf import CSRFProtect
 import bleach
-from dotenv import load_dotenv
-import os
 from markupsafe import escape
 from dateutil.relativedelta import relativedelta
 import datetime
@@ -14,26 +12,19 @@ from self_protection import protect,sanitize_input,getHash,encStandard,decStanda
 import openai
 import anthropic
 import uuid
-from prompt_injection.prompt_injection_sanitizer import prompt_injection_score
 from sensitive_information.sensitive_data_sanitizer import SensitiveDataSanitizer
-from mdos.mdos_sanitizer import PromptAnalyzer
 from aishieldsemail import send_secure_email
 import secrets
 from insecure_out_handling import InsecureOutputSanitizer
 from overreliance.overreliance_data_sanitizer import OverrelianceDataSanitizer as ODS
 import json
 import netifaces as nif
-import os
-import nltk
-from nltk.corpus import stopwords
 from dotenv import load_dotenv
+import os
 
 load_dotenv()
 
 app = Flask(__name__)
-
-nltk.download("stopwords")
-
 app.config['SECRET_KEY'] = str(decStandard(os.getenv('SECRET_KEY')))
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI')
 email_from = os.getenv('EMAIL_FROM')
@@ -58,7 +49,7 @@ apis = [{"APIowner":"OpenAI","TextGen": {"Name":"ChatGPT","Models":[
 
 def app_context():
     app = Flask(__name__)
-    strAppKey = os.getenv('STR_APP_KEY')
+    strAppKey = decStandard(os.getenv('STR_APP_KEY'))
     app.secret_key = strAppKey.encode(str="utf-8")
     csrf = CSRFProtect(app)
     with app.app_context():
@@ -141,7 +132,10 @@ class RequestLog(db.Model):
         ten_minutes_ago = datetime.datetime.now() - datetime.timedelta(minutes=10)
         
         # Filter requests based on client_id and creation date
-        return RequestLog.query.filter_by(client_id=client_id).filter(RequestLog.create_date >= ten_minutes_ago).count()
+        return RequestLog.query.filter_by(client_id=client_id) \
+                            .filter(RequestLog.create_date >= ten_minutes_ago) \
+                            .filter(RequestLog.Headers.like('%chat%')) \
+                            .count()
 
 class User(db.Model):
     __tablename__ = "users"
@@ -348,8 +342,11 @@ def before_request():
     # James Yu can add code here to handle MDOS protection
     client_id = request.remote_addr
     request_count = RequestLog.get_request_count(client_id)
-    
-    if request_count >= 500:  # Adjust the limit as needed
+    if not protect(request):
+        # MDOS (Model Denial of Service entrypoint)
+        flash('Something went wrong, please try again', 'success')
+        abort(400)
+    elif request_count >= 500:  # Adjust the limit as needed
         flash('Too many requests, please try again later', 'danger')
         print(request_count)
         abort(429)  # Too Many Requests status code
@@ -455,11 +452,7 @@ def login():
                 #print(str(user().id))
                 if str(user.passphrase) == user_entered_code:
                     if int(user.user_verified) == 1:
-                        InputPromptHistory = (db.session.query(InputPrompt).filter(InputPrompt.user_id == user.id))
-                        chathistory = {}
-                        for prmpt in InputPromptHistory:
-                            chathistory[prmpt.internalPromptID]=prmpt.inputPrompt
-                        return render_template('chat.html', InputPromptHistory=chathistory,email=user.email,username=user.first_name + " " + user.last_name,apis=apis,output=False)
+                        return render_template('chat.html', email=user.email,username=user.first_name + " " + user.last_name,apis=apis)
                     else:
                         strCode = ""
                         for i in range(6):
@@ -597,59 +590,15 @@ def forgot():
 def chat():
     try:
         if request.method == 'GET':
-            if request.query_string is not None:
-                email = request.form.get(key="email")
-                user = (
+            user = (
                         db.session.query(User)
                         .filter(User.email == str(email).lower(),User.user_verified == 1)
                         .one_or_none()
                     )
-                if user is not None:
-                    if str(request.query_string).startswith("?chat="):
-                        chatId = request.query_string.split("=")[1]
-                    #now get all the data to repopulate the form/page data elements
-                        rawInput = (db.session.query(InputPrompt).filter(InputPrompt.internalPromptID==str(chatId),InputPrompt.user_id == user.id).one_or_none)
-                    if rawInput is not None:
-                        preprocPrompt = (db.session.query(PreProcInputPrompt).filter(PreProcInputPrompt.internalPromptID==str(chatId)).one_or_none)
-                        if preprocPrompt is not None:
-                            postProcResp = (db.session.query(PostProcResponse).filter(PostProcResponse.inputPromptID==str(chatId)).one_or_none)
-                            if postProcResp is not None:
-                                aiShieldsReport = (db.session.query(AiShieldsReport).filter(AiShieldsReport.internalPromptID==str(chatId)).one_or_none)
-                                if aiShieldsReport is not None:
-                                    rawInputStr = rawInput().inputPrompt
-                                    preprocPromptStr = preprocPrompt().preProcInputPrompt
-                                    apiResponse = (db.session.query(ApiResponse).filter(ApiResponse.internalPromptID==str(chatId)).one_or_none)
-                                    if apiResponse is not None:
-                                        rawOutputStr = apiResponse().rawoutput
-                                        postProcRespStr = postProcResp().postProcOutputResponse
-                                        findings = [{"category":"Sensitive Data","details":aiShieldsReportObj.SensitiveDataSanitizerReport,"id":aiShieldsReportObj.internalPromptID},
-                                            { "category":"Prompt Injection","details":aiShieldsReportObj.PromptInjectionReport,"id":aiShieldsReportObj.internalPromptID},
-                                            {"category":"Overreliance","details":aiShieldsReportObj.OverrelianceReport,"id":aiShieldsReportObj.internalPromptID},
-                                            {"category":"MDOS","details":aiShieldsReportObj.MDOSReport,"id":aiShieldsReportObj.internalPromptID},
-                                            {"category":"Insecure Output Handling","details":aiShieldsReportObj.InsecureOutputReportHandling,"id":aiShieldsReportObj.internalPromptID}]
-                                        InputPromptHistory = (db.session.query(InputPrompt).filter(InputPrompt.user_id == rawInput().user_id))
-                                        chathistory = {}
-                                        for prmpt in InputPromptHistory:
-                                            chathistory[prmpt.internalPromptID]=prmpt.inputPrompt
-                                        return render_template('chat.html',rawInput=rawInputStr,rawOutput=rawOutputStr,preProcStr=preprocPromptStr,InputPromptHistory=chathistory,PostProcResponseHistory="",apis=apis,email=email,username=rawInput().username,response=postProcResp().postProcOutputResponse,findings=findings,output=True)
-                                return render_template('chat.html',apis=apis,email=request.form["email"],username=user().username,InputPromptHistory={})
-                            return render_template('chat.html',apis=apis,email=request.form["email"],username=user.username,InputPromptHistory={})
-                        return render_template('chat.html',apis=apis,email=request.form["email"],username=user.username,InputPromptHistory={})
-                    return render_template('chat.html',apis=apis,email=request.form["email"],username=user.username,InputPromptHistory={})
-            elif request.form.get(key="email") is not None:
-                #return render_template('chat.html',apis=apis,email=request.form["email"],username=user.username) 
-                email = request.form.get(key="email")
-                user = (
-                        db.session.query(User)
-                        .filter(User.email == str(email).lower(),User.user_verified == 1)
-                        .one_or_none()
-                    )
-                if user is not None:
-                    return render_template('chat.html',apis=apis,email=request.form["email"],username=user.username,InputPromptHistory={})    
-            else:
+            if user is not None:
                 return render_template('newaccount.html',apis=apis,email=request.form["email"])
-            return render_template('chat.html',apis=apis,email=request.form["email"],username=user.username,InputPromptHistory={})
-        elif request.method == 'POST':
+            return render_template('chat.html',apis=apis,email=request.form["email"],username=user.username)
+        if request.method == 'POST':
             #if protect(request):
             message = ""
             api = ""
@@ -718,7 +667,6 @@ def chat():
                 strRole = request.form['role']
             if apiObj:
                 preprocessedPromptString = aishields_sanitize_input(rawInput)
-                prompt_injection_scores = prompt_injection_score(rawInput.inputPrompt)
                 preprocessedPrompt = PreProcInputPrompt(
                     internalPromptID=internalID,
                     user_id=userid,
@@ -729,9 +677,8 @@ def chat():
                     inputPrompt=rawInput.inputPrompt,
                     preProcInputPrompt=preprocessedPromptString,
                     username=username,
-
                     SensitiveDataSanitizerReport =  str(preprocessedPromptString),
-                    PromptInjectionReport = "The model is " + str(prompt_injection_scores["jailbreak_score"] * 100) + " percent confident there is a jailbreak, and " + str(prompt_injection_scores["malicious_request_score"] * 100) + " percent confident there is a malicious request",
+                    PromptInjectionReport = "",
                     OverrelianceReport = "",
                     OverrelianceKeyphraseData = ""
                 )
@@ -792,7 +739,7 @@ def chat():
                     created_date = datetime.datetime.now(datetime.timezone.utc)
                 )
                 postProcPromptObj = aishields_postprocess_output(postProcPromptObj)
-                #preprocessedPrompt = aishields_overreliance_postProc(rawInput,preprocessedPrompt,postProcPromptObj,rawInput)
+                preprocessedPrompt = aishields_overreliance_postProc(rawInput,preprocessedPrompt,postProcPromptObj,rawInput)
                 
                 db.session.add(postProcPromptObj)
                 db.session.commit()
@@ -805,15 +752,6 @@ def chat():
                 if postProcRespObj is not None:
                     postProcID = postProcRespObj().id 
                 # prepare report
-                overRelianceReport = ""
-                if preprocessedPrompt is not None:
-                    if preprocessedPrompt.OverrelianceReport is not None:
-                        overRelianceReport = preprocessedPrompt.OverrelianceReport
-                mdosReport = getMDOSreport(rawInput)
-                
-                print("rawInput: " + rawInput.inputPrompt)
-                print("MDOS Report: " + str(mdosReport))
-                print("overRelianceReport: " + overRelianceReport)
                 aiShieldsReportObj = AiShieldsReport(
                     rawInputPrompt_id = rawInputObj().id,
                     internalPromptID = internalID,
@@ -831,9 +769,8 @@ def chat():
                     postProcResponse_id = postProcRespObj().id,
                     SensitiveDataSanitizerReport = preProcObj().SensitiveDataSanitizerReport,
                     PromptInjectionReport = preProcObj().PromptInjectionReport,    
-                    OverrelianceReport = preProcObj().OverrelianceReport,
+                    OverrelianceReport = preprocessedPrompt.OverrelianceReport,
                     InsecureOutputReportHandling = postProcRespObj().InsecureOutputHandlingReport,     
-                    MDOSreport = mdosReport,
                     updated_date = datetime.datetime.now(datetime.timezone.utc)
                 )
                 db.session.add(aiShieldsReportObj)
@@ -842,66 +779,14 @@ def chat():
                 findings = [{"category":"Sensitive Data","details":aiShieldsReportObj.SensitiveDataSanitizerReport,"id":aiShieldsReportObj.internalPromptID},
                 { "category":"Prompt Injection","details":aiShieldsReportObj.PromptInjectionReport,"id":aiShieldsReportObj.internalPromptID},
                 {"category":"Overreliance","details":aiShieldsReportObj.OverrelianceReport,"id":aiShieldsReportObj.internalPromptID},
-                {"category":"MDOS","details":aiShieldsReportObj.MDOSreport,"id":aiShieldsReportObj.MDOSreport},
                 {"category":"Insecure Output Handling","details":aiShieldsReportObj.InsecureOutputReportHandling,"id":aiShieldsReportObj.internalPromptID}]
-                InputPromptHistory = (db.session.query(InputPrompt).filter(InputPrompt.user_id == userid).order_by(desc(InputPrompt.created_date)))
-                chathistory = {}
-                #chathistoryReversed = {}
-                for prmpt in InputPromptHistory:
-                    chathistory[prmpt.internalPromptID]=prmpt.inputPrompt
-                #for revprmnt in dict(chathistory).items().__reversed__():
-                    #chathistoryReversed[revprmnt.index] = revprmnt
-                PostProcResponseHistory = (db.session.query(PostProcResponse).filter(PostProcResponse.user_id == userid))
-                return render_template('chat.html',rawInput=rawInputObj().inputPrompt,preProcStr=preProcObj().preProcInputPrompt,rawResponse=rawOutputObj().rawoutput,InputPromptHistory=chathistory,PostProcResponseHistory=PostProcResponseHistory,apis=apis,email=email,username=username,response=postProcRespObj().postProcOutputResponse,findings=findings,output=True)
-        else:
-            return render_template('chat.html',InputPromptHistory={},apis=apis,email=email,username=username)
-    except Exception as err:
-        flash(err)
-        print('An error occured: ' + str(err)) 
-        return render_template('chat.html',apis=apis,email=email,InputPromptHistory={}) 
-
-def getMDOSreport(input:InputPrompt):
-        #sensitive data sanitization:
-        # now sanitize for privacy protected data
-    try:
-        prompt = input.inputPrompt
-
-        # Instantiate the analyzer
-        analyzer = PromptAnalyzer()
-        
-        # Analyze the prompt
-        is_expensive = analyzer.is_expensive_prompt(prompt)
-        complexity = analyzer.complexity_metric(prompt)
-
-        # Return the results as a dictionary
-        result = {
-            "prompt": prompt,
-            "is_expensive": is_expensive,
-            "complexity_metric": complexity
-        }
-        return str(result)
+                
+        return render_template('chat.html',apis=apis,email=email,username=username,response=postProcRespObj().postProcOutputResponse,findings=findings,output=True)
     except Exception as err:
         print('An error occured: ' + str(err)) 
-
-
+        return render_template('chat.html',apis=apis,email=email,username=username) 
 
 def aishields_sanitize_input(input:InputPrompt):
-    #now sanitize for Prompt Injection
-    strPreProcInput = ""
-    strRawInputPrompt = input.inputPrompt
-
-
-
-    #sensitive data sanitization:
-    # now sanitize for privacy protected data
-    sds = SensitiveDataSanitizer()
-    strSensitiveDataSanitized = sds.sanitize_input(input_content=strRawInputPrompt)           
-    
-    
-    strPreProcInput += strRawInputPrompt    
-    
-    #now assess for Overreliance
-    return strPreProcInput
         #sensitive data sanitization:
         # now sanitize for privacy protected data
     try:
@@ -917,15 +802,23 @@ def aishields_sanitize_input(input:InputPrompt):
     except Exception as err:
         print('An error occured: ' + str(err)) 
 
-
+def aishields_promptInjection_check(input:InputPrompt):
+        #sensitive data sanitization:
+        # now sanitize for privacy protected data
+    try:
+        promptInjectionOutput = {}
+        #now sanitize for Prompt Injection PASS
+        return promptInjectionOutput
+    except Exception as err:
+        print('An error occured: ' + str(err))
 
 def aishields_overreliance_inputfunc(input:InputPrompt, preproc:PreProcInputPrompt):
         #sensitive data sanitization:
         # now sanitize for privacy protected data
     try:
         SITE_IGNORE_LIST = ["youtube.com"]
-        NUMBER_OF_SEARCHES = 1
-        NUMBER_OF_LINKS = 1
+        NUMBER_OF_SEARCHES = 4
+        NUMBER_OF_LINKS = 10
         STOPWORD_LIST = ["*", "$"]
         
         ods = ODS()
@@ -1001,4 +894,3 @@ if __name__ == '__main__':
         app.run(debug=True)
         
         
-

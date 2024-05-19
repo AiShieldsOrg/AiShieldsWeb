@@ -7,3 +7,4 @@ __pycache__/
 databases/
 *.pem
 .env
+instance/aiShieldsSqlite3DB.db
