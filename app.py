@@ -884,7 +884,6 @@ def getMDOSreport(input:InputPrompt):
         print('An error occured: ' + str(err)) 
 
 
-
 def aishields_sanitize_input(input:InputPrompt):
     #now sanitize for Prompt Injection
     strPreProcInput = ""
