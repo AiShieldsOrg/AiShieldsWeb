@@ -7,6 +7,7 @@ from nltk.corpus import stopwords
 from nltk.stem.porter import PorterStemmer
 
 import string
+import os
 
 
 class Prompt_Injection_Sanitizer:
@@ -33,15 +34,16 @@ def pre_proecess_prompt(prompt:str):
 
 def prompt_injection_score(input_str:str):
     try:
-        basepath = "/Users/tylerlachney/Documents/homeProjects/BCAMP/aiShieldsLocal/AiShieldsWeb/prompt_injection/"
+        module_path = os.path.dirname(__file__)
+        basepath = f"{module_path}/"
         scores = {
             "jailbreak_score": 0,
             "malicious_request_score": 0
         }
-        jb_model_path = basepath + "models/jailbreak_model.bin"
-        jb_vector_path = basepath + "models/jailbreak_vectorizer.bin"
-        mr_model_path = basepath + "models/malicious_request_model.bin"
-        mr_vector_path = basepath + "models/malicious_request_vectorizer.bin"
+        jb_model_path = os.path.join(basepath, "models/jailbreak_model.bin")
+        jb_vector_path = os.path.join(basepath, "models/jailbreak_vectorizer.bin")
+        mr_model_path = os.path.join(basepath, "models/malicious_request_model.bin")
+        mr_vector_path = os.path.join(basepath, "models/malicious_request_vectorizer.bin")
         jailbreak_detector = Prompt_Injection_Sanitizer(jb_model_path, jb_vector_path)
         malicious_request_detector = Prompt_Injection_Sanitizer(mr_model_path, mr_vector_path)
         input_str = pre_proecess_prompt(input_str)
