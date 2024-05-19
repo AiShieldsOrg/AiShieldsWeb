@@ -36,16 +36,18 @@ chmod +x  helpers/Patrick-5e39e57f-0550-49f3-8db6-d33cd139168f.pem
 ```python
 strPEMfileName = './helpers/Patrick-5e39e57f-0550-49f3-8db6-d33cd139168f.pem'
 ```
-5. Set the database password in your local copy 
-On or around line 6 of app.py
-`app.config['SECRET_KEY'] = `
-set the secret SQLite key to your_secret_key
+5. Download .env file from discord: https://discord.com/channels/1229942715450523658/1230004837845045369/1239989586562646126
+Do not forget to rename file into `.env` (discord renames them into env). Put this file into project working directory.
+Do not forget to set the correct local path to your sqllite 3 `sqlite3:////` in your .env file
+6. Set the secret SQLite key to your_secret_key [optional]
 ```python
 app.config['SECRET_KEY'] = 'your_secret_key' 
 ```
-6. run in Flask or debug in ide:
+7. run in Flask or debug in IDE:
+
 UNIX/MacOS/Linux 
 run the `run_flask_app.sh`
+
 Windows:
 ```commandline
 $env:FLASK_APP = "app.py"

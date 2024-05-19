@@ -1,8 +1,6 @@
 from flask import Flask, request, abort,render_template, redirect, url_for, flash
 from flask_wtf import CSRFProtect
 import bleach
-from dotenv import load_dotenv
-import os
 from markupsafe import escape
 from dateutil.relativedelta import relativedelta
 import datetime
@@ -12,38 +10,41 @@ from sqlalchemy.orm import relationship, backref
 from sqlalchemy.ext.declarative import declarative_base
 from self_protection import protect,sanitize_input,getHash,encStandard,decStandard  
 import openai
-import anthropic
 import uuid
-from prompt_injection.prompt_injection_sanitizer import prompt_injection_score
-from sensitive_information.sensitive_data_sanitizer import SensitiveDataSanitizer
+#from sensitive_data_sanitizer import SensitiveDataSanitizer
 from aishieldsemail import send_secure_email
 import secrets
 from insecure_out_handling import InsecureOutputSanitizer
 from overreliance.overreliance_data_sanitizer import OverrelianceDataSanitizer as ODS
-import json
-import netifaces as nif
+from dotenv import load_dotenv
 import os
-import nltk
-from nltk.corpus import stopwords
 
+import nltk
+nltk.download('stopwords')
+
+load_dotenv()
 
 app = Flask(__name__)
 
-nltk.download("stopwords")
-
 app.config['SECRET_KEY'] = str(decStandard(os.getenv('SECRET_KEY')))
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI')
+
 email_from = os.getenv('EMAIL_FROM')
 smtpserver = os.getenv('SMTP_SERVER')
-smtpport = os.getenv('SMTP_PORT')
-smtpp = os.getenv('SMTP_PASSWORD')
 smtpu = os.getenv('SMTP_USER')
+smtpp = os.getenv('SMTP_PASSWORD')
+smtpport = os.getenv('SMTP_PORT')
+
+if not all([app.config['SECRET_KEY'], app.config['SQLALCHEMY_DATABASE_URI'], email_from, smtpserver, smtpu, smtpp, smtpport]):
+    raise ValueError("One or more environment variables are not set properly")
 
 smtp_server = str(decStandard(smtpserver))
 smtp_port = str(decStandard(smtpport))
 smtp_p = str(decStandard(smtpp))
 smtp_u = str(decStandard(smtpu))
+
 db = SQLAlchemy(app)
+
 apis = [{"APIowner":"OpenAI","TextGen": {"Name":"ChatGPT","Models":[
                 {"Name":"GPT 4","details":{ "uri": "https://api.openai.com/v1/chat/completions","jsonv":"gpt-4"}},
                 {"Name":"GPT 4 Turbo Preview","details":{ "uri": "https://api.openai.com/v1/chat/completions","jsonv":"gpt-4-turbo-preview" }},
@@ -55,7 +56,7 @@ apis = [{"APIowner":"OpenAI","TextGen": {"Name":"ChatGPT","Models":[
 
 def app_context():
     app = Flask(__name__)
-    os.getenv('STR_APP_KEY')
+    strAppKey = decStandard(os.getenv('STR_APP_KEY'))
     app.secret_key = strAppKey.encode(str="utf-8")
     csrf = CSRFProtect(app)
     with app.app_context():
@@ -105,40 +106,32 @@ requests_client = Table(
    
 )
 
-class Clients(db.Model):
-    __tablename__ = "clients"
-    id = db.Column(BigInteger, primary_key=True)
-    IPaddress = db.Column(NVARCHAR)
-    MacAddress = db.Column(NVARCHAR)
-    create_date = db.Column(DateTime,unique=False, default=datetime.datetime.now(datetime.timezone.utc))
-    requests = relationship("RequestLog", secondary=requests_client)
-
 class RequestLog(db.Model):
-    __tablename__ = "requests"
-    id = db.Column(Integer, primary_key=True)
-    client_id = db.Column(Integer, nullable=False)  # Assuming client ID is a string
-    client_ip = db.Column(NVARCHAR, nullable=False)  # Assuming client ID is a string
-    url = db.Column(NVARCHAR)
-    request_type = db.Column(NVARCHAR)
-    Headers = db.Column(NVARCHAR)  # Using Text instead of NVARCHAR for compatibility
-    Body = db.Column(NVARCHAR)
-    create_date = db.Column(DateTime, nullable=False, default=datetime.datetime.now)
+    __tablename__ = "request_logs"
+    id = db.Column(db.Integer, primary_key=True)
+    client_id = db.Column(db.String(255), nullable=False)  # Assuming client ID is a string
+    request_type = db.Column(db.String(255))
+    headers = db.Column(db.Text)  # Using Text instead of NVARCHAR for compatibility
+    body = db.Column(db.Text)
+    create_date = db.Column(db.DateTime, nullable=False, default=datetime.datetime.now)
 
-    # def __init__(self, client_id,client_ip request_type, headers, body, url):
-    #     self.client_ip = client_ip
-    #     self.client_id = client_id
-    #     self.request_type = request_type
-    #     self.Headers = headers
-    #     self.Body = body
-    #     self.url = url
+    def __init__(self, client_id, request_type, headers, body):
+        self.client_id = client_id
+        self.request_type = request_type
+        self.headers = headers
+        self.body = body
 
     @staticmethod
-    def get_request_count(client_ip):
+    # Filter requests based on client_id, Referer containing "chat", and creation date
+    def get_request_count(client_id):
         # Calculate the datetime 10 minutes ago
         ten_minutes_ago = datetime.datetime.now() - datetime.timedelta(minutes=10)
         
-        # Filter requests based on client_id and creation date
-        return RequestLog.query.filter_by(client_ip=client_ip).filter(RequestLog.create_date >= ten_minutes_ago).count()
+        # Filter requests based on client_id, headers containing "chat", and creation date
+        return RequestLog.query.filter_by(client_id=client_id) \
+                            .filter(RequestLog.create_date >= ten_minutes_ago) \
+                            .filter(RequestLog.headers.like('%chat%')) \
+                            .count()
 
 class User(db.Model):
     __tablename__ = "users"
@@ -241,10 +234,8 @@ class PreProcInputPrompt(db.Model):
     SensitiveDataSanitizerReport = db.Column(NVARCHAR,unique=False,nullable=True)
     PromptInjectionReport = db.Column(NVARCHAR,unique=False,nullable=True)    
     OverrelianceReport = db.Column(NVARCHAR,unique=False,nullable=True)
-    OverrelianceKeyphraseData = db.Column(NVARCHAR,unique=False,nullable=True)
     created_date = db.Column(DateTime,default=datetime.datetime.now(datetime.timezone.utc))
     updated_date = db.Column(DateTime,default=datetime.datetime.now(datetime.timezone.utc))
-
  
 class ApiResponse(db.Model):
     __tablename__ = "apiResponse"
@@ -297,47 +288,21 @@ class AiShieldsReport(db.Model):
     PromptInjectionReport = db.Column(NVARCHAR,unique=False,nullable=True)    
     OverrelianceReport = db.Column(NVARCHAR,unique=False,nullable=True)
     InsecureOutputReportHandling = db.Column(NVARCHAR,unique=False,nullable=True)     
-    MDOSreport = db.Column(NVARCHAR,unique=False,nullable=True)   
     created_date = db.Column(DateTime,default=datetime.datetime.now(datetime.timezone.utc))
     updated_date = db.Column(DateTime)
     
-
-def mac_for_ip(ip):
-    'Returns a list of MACs for interfaces that have given IP, returns None if not found'
-    for i in nif.interfaces():
-        addrs = nif.ifaddresses(i)
-        try:
-            if_mac = addrs[nif.AF_LINK][0]['addr']
-            if_ip = addrs[nif.AF_INET][0]['addr']
-        except IndexError: #ignore ifaces that dont have MAC or IP
-            if_mac = if_ip = None
-        except KeyError:
-            if_mac = if_ip = None
-        if if_ip == ip:
-            return if_mac
-    return None
+import json
 
 @app.before_request
 def before_request():
     # Save the request data for MDOS protection
-    macAddress = mac_for_ip(request.remote_addr)
-    if macAddress is None:
-        macAddress = "?"
-    client_info = Clients(
-        IPaddress=request.remote_addr,
-        MacAddress=macAddress
-    )
-    db.session.add(client_info)
-    db.session.commit()
-    db.session.flush()
     request_data = RequestLog(
-        client_id=client_info.id, 
-        client_ip=client_info.IPaddress, 
+        client_id=request.remote_addr,  # Assuming client IP is sufficient
         request_type=request.method,
-        Headers=repr(dict(request.headers)),
-        Body=request.data.decode('utf-8'),
-        url=request.url
+        headers=json.dumps(dict(request.headers)),
+        body=request.data.decode('utf-8')
     )
+
     db.session.add(request_data)
     db.session.commit()
 
@@ -345,13 +310,12 @@ def before_request():
     # James Yu can add code here to handle MDOS protection
     client_id = request.remote_addr
     request_count = RequestLog.get_request_count(client_id)
+    print(request_count)
     if not protect(request):
         # MDOS (Model Denial of Service entrypoint)
         flash('Something went wrong, please try again', 'success')
         abort(400)
-    elif request_count >= 500:  # Adjust the limit as needed
-        flash('Too many requests, please try again later', 'danger')
-        print(request_count)
+    elif request_count >= 50:  # Adjust the limit as needed
         abort(429)  # Too Many Requests status code
     
 @app.route("/",methods=['GET','POST'])
@@ -578,7 +542,7 @@ def forgot():
                     s_port = smtp_port
                     s_p = smtp_p
                     m_subj = "Please reset your email for AiShields.org"
-                    m_message = "Dear " + user.first_name + ", \n\n Please click this link: <a href='https://dev.aishields.org/reset?code=" + strCode +"' or paste it into your browser address bar to change your password. \n\nThis link will expire in 20 minutes. \n\n Thank you, \n\n Support@AiShields.org"
+                    m_message = "Dear " + user.first_name + ", \n\n Please click this link: <a href='http://127.0.0.1:5000/reset?code=" + strCode +"' or paste it into your browser address bar to change your password. \n\nThis link will expire in 20 minutes. \n\n Thank you, \n\n Support@AiShields.org"
                     send_secure_email(to_email,from_email,s_server,s_port,from_email,s_p,m_subj,m_message)
                     return render_template('login.html')
             else:
@@ -588,7 +552,7 @@ def forgot():
     except Exception as err:
         print('An error occured: ' + str(err))
         return render_template("login.html")
-        
+
 @app.route('/chat', methods=['GET', 'POST'])
 def chat():
     try:
@@ -670,7 +634,6 @@ def chat():
                 strRole = request.form['role']
             if apiObj:
                 preprocessedPromptString = aishields_sanitize_input(rawInput)
-                prompt_injection_scores = prompt_injection_score(rawInput.inputPrompt)
                 preprocessedPrompt = PreProcInputPrompt(
                     internalPromptID=internalID,
                     user_id=userid,
@@ -681,13 +644,24 @@ def chat():
                     inputPrompt=rawInput.inputPrompt,
                     preProcInputPrompt=preprocessedPromptString,
                     username=username,
+                    SensitiveDataSanitizerReport = "AiShields Data Sanitizer removed the following from the raw input\n for your safety: \n" + str(escape(aishields_get_string_diff(rawInput.inputPrompt,preprocessedPromptString))),
+                    PromptInjectionReport = "",
+                    OverrelianceReport = ""
+                    )
+                
+                #=== OVERRELIANCE ALGORITHM ===
+                
+                SITE_IGNORE_LIST = ["youtube.com"]
+                NUMBER_OF_SEARCHES = 4
+                NUMBER_OF_LINKS = 10
+                STOPWORD_LIST = ["*", "$"]
+                
+                ods = ODS()
 
-                    SensitiveDataSanitizerReport =  str(preprocessedPromptString),
-                    PromptInjectionReport = "The model is " + str(prompt_injection_scores["jailbreak_score"] * 100) + " percent confident there is a jailbreak, and " + str(prompt_injection_scores["malicious_request_score"] * 100) + " percent confident there is a malicious request",
-                    OverrelianceReport = "",
-                    OverrelianceKeyphraseData = ""
-                )
-                #preprocessedPrompt = aishields_overreliance_inputfunc(rawInput,preprocessedPrompt)
+                overreliance_keyphrase_data_list = ods.get_keyphrases_and_links(preprocessedPrompt.preProcInputPrompt,NUMBER_OF_SEARCHES,link_number_limit=NUMBER_OF_LINKS, stopword_list=STOPWORD_LIST)
+                
+                overreliance_keyphrase_data_list = ods.get_articles(overreliance_keyphrase_data_list,site_ignore_list=SITE_IGNORE_LIST)
+                
                 #=== ===
                 
                 db.session.add(preprocessedPrompt)
@@ -744,7 +718,10 @@ def chat():
                     created_date = datetime.datetime.now(datetime.timezone.utc)
                 )
                 postProcPromptObj = aishields_postprocess_output(postProcPromptObj)
-                #preprocessedPrompt = aishields_overreliance_postProc(rawInput,preprocessedPrompt,postProcPromptObj,rawInput)
+                
+                data_summary_list = ods.compare(overreliance_keyphrase_data_list,postProcPromptObj.rawOutputResponse)
+                
+                overreliance_string = f"score: {data_summary_list[0]['score']} of {data_summary_list[0]['link']}"
                 
                 db.session.add(postProcPromptObj)
                 db.session.commit()
@@ -774,7 +751,7 @@ def chat():
                     postProcResponse_id = postProcRespObj().id,
                     SensitiveDataSanitizerReport = preProcObj().SensitiveDataSanitizerReport,
                     PromptInjectionReport = preProcObj().PromptInjectionReport,    
-                    OverrelianceReport = preprocessedPrompt.OverrelianceReport,
+                    OverrelianceReport = overreliance_string,
                     InsecureOutputReportHandling = postProcRespObj().InsecureOutputHandlingReport,     
                     updated_date = datetime.datetime.now(datetime.timezone.utc)
                 )
@@ -791,81 +768,22 @@ def chat():
         print('An error occured: ' + str(err)) 
         return render_template('chat.html',apis=apis,email=email,username=username) 
 
-
-
 def aishields_sanitize_input(input:InputPrompt):
-    #now sanitize for Prompt Injection
-    strPreProcInput = ""
-    strRawInputPrompt = input.inputPrompt
-
-
-
-    #sensitive data sanitization:
-    # now sanitize for privacy protected data
-    sds = SensitiveDataSanitizer()
-    strSensitiveDataSanitized = sds.sanitize_input(input_content=strRawInputPrompt)           
-    
-    
-    strPreProcInput += strRawInputPrompt    
-    
-    #now assess for Overreliance
-    return strPreProcInput
         #sensitive data sanitization:
         # now sanitize for privacy protected data
     try:
         strPreProcInput = ""
         strRawInputPrompt = input.inputPrompt
         sanitizedInput = sanitize_input(strRawInputPrompt)
-        sds = SensitiveDataSanitizer()
-        strSensitiveDataSanitized = sds.sanitize_input(input_content=sanitizedInput)           
-        strPreProcInput += str(strSensitiveDataSanitized)
+        # sds = SensitiveDataSanitizer()
+        # strSensitiveDataSanitized = sds.sanitize_input(input_content=strRawInputPrompt)
+        strPreProcInput += str(sanitizedInput)
         #now sanitize for Prompt Injection
         #now assess for Overreliance
         return strPreProcInput
     except Exception as err:
-        print('An error occured: ' + str(err)) 
-
-
-
-def aishields_overreliance_inputfunc(input:InputPrompt, preproc:PreProcInputPrompt):
-        #sensitive data sanitization:
-        # now sanitize for privacy protected data
-    try:
-        SITE_IGNORE_LIST = ["youtube.com"]
-        NUMBER_OF_SEARCHES = 4
-        NUMBER_OF_LINKS = 10
-        STOPWORD_LIST = ["*", "$"]
-        
-        ods = ODS()
-
-        overreliance_keyphrase_data_list = ods.get_keyphrases_and_links(preproc.preProcInputPrompt,NUMBER_OF_SEARCHES,link_number_limit=NUMBER_OF_LINKS, stopword_list=STOPWORD_LIST)
-        
-        overreliance_keyphrase_data_list = ods.get_articles(overreliance_keyphrase_data_list,site_ignore_list=SITE_IGNORE_LIST)
-        #preproc.OverrelianceKeyphraseData = repr(overreliance_keyphrase_data_list)
-        return overreliance_keyphrase_data_list
-    except Exception as err:
         print('An error occured: ' + str(err))  
-
-def aishields_overreliance_postProc(input:ApiResponse,preproc:PreProcInputPrompt, postproc:PostProcResponse,rawinput:InputPrompt):
-        #sensitive data sanitization:
-        # now sanitize for privacy protected data
-    try:
-        SITE_IGNORE_LIST = ["youtube.com"]
-        NUMBER_OF_SEARCHES = 4
-        NUMBER_OF_LINKS = 10
-        STOPWORD_LIST = ["*", "$"]
-        
-        ods= ODS()
-        overreliance_keyphrase_data_list = ods.get_keyphrases_and_links(preproc.preProcInputPrompt,NUMBER_OF_SEARCHES,link_number_limit=NUMBER_OF_LINKS, stopword_list=STOPWORD_LIST)
-        overreliance_keyphrase_data_list = ods.get_articles(overreliance_keyphrase_data_list,site_ignore_list=SITE_IGNORE_LIST)
-        data_summary_list = ods.compare(overreliance_keyphrase_data_list,postproc.rawOutputResponse)
-        overreliance_string = f"score: {data_summary_list[0]['score']} of {data_summary_list[0]['link']}"
-        preproc.OverrelianceReport = overreliance_string
-        return preproc
-    except Exception as err:
-        print('An error occured: ' + str(err))  
-
-
+    
 def aishields_postprocess_output(postProcResponseObj:PostProcResponse):
     #insecure output handing
     try:
@@ -907,5 +825,7 @@ if __name__ == '__main__':
     with app.app_context():
         db.create_all()
         app.run(debug=True)
-        
+        db.session.query(UserCode).filter(UserCode.id > 1, UserCode.id < 38).delete()
+        db.commit()
+        #app.run(ssl_context=('cert.pem', 'key.pem')) #to test with https self signed cert
         
