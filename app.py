@@ -889,16 +889,12 @@ def aishields_sanitize_input(input:InputPrompt):
     strPreProcInput = ""
     strRawInputPrompt = input.inputPrompt
 
-
-
     #sensitive data sanitization:
     # now sanitize for privacy protected data
     sds = SensitiveDataSanitizer()
-    strSensitiveDataSanitized = sds.sanitize_input(input_content=strRawInputPrompt)           
-    
-    
-    strPreProcInput += strRawInputPrompt    
-    
+    strSensitiveDataSanitized = sds.sanitize_input(input_content=strRawInputPrompt)
+    strPreProcInput += strSensitiveDataSanitized
+
     #now assess for Overreliance
     return strPreProcInput
         #sensitive data sanitization:
