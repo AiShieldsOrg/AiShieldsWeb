@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AiShields Chat</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/milligram/1.4.1/milligram.min.css">
+    <style>
+        body {
+            padding: 2rem;
+            display: flex;
+            flex-direction: row;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            flex-grow: 1;
+            padding: 2rem;
+        }
+        .sidebar {
+            width: 200px;
+            background-color: #f4f4f4;
+            padding: 1rem;
+            margin-right: 2rem;
+            height: 100vh;
+            position: sticky;
+            top: 0;
+        }
+        .sidebar a {
+            display: block;
+            margin-bottom: 1rem;
+            text-decoration: none;
+            color: DodgerBlue;
+        }
+        .sidebar a:hover {
+            color: Navy;
+        }
+        .center {
+            text-align: center;
+        }
+        .hidden {
+            display: none;
+        }
+        .hamburger-menu {
+            display: none;
+            flex-direction: column;
+            cursor: pointer;
+        }
+        .hamburger-menu div {
+            width: 30px;
+            height: 3px;
+            background-color: black;
+            margin: 5px 0;
+        }
+        @media (max-width: 768px) {
+            body {
+                flex-direction: column;
+                padding: 1rem;
+            }
+            .sidebar {
+                display: none;
+            }
+            .container {
+                padding: 1rem;
+            }
+            .hamburger-menu {
+                display: flex;
+                margin-bottom: 1rem;
+            }
+            .mobile-sidebar {
+                display: none;
+                flex-direction: column;
+                background-color: #f4f4f4;
+                padding: 1rem;
+            }
+            .mobile-sidebar a {
+                margin-bottom: 1rem;
+            }
+            .mobile-menu select {
+                width: 100%;
+                margin-bottom: 1rem;
+            }
+        }
+        .model-selector {
+            margin-bottom: 1rem;
+        }
+        .button-primary {
+            background-color: Navy !important;
+            border-color: Navy !important;
+            color: White !important;
+            font-family: Verdana, sans-serif;
+            font-weight: bolder;
+        }
+        .button-primary:hover {
+            background-color: #000080 !important;
+            border-color: #000080 !important;
+            color: White !important;
+        }
+        input:focus, select:focus, textarea:focus {
+            border-color: Navy !important;
+            box-shadow: 0 0 5px Navy;
+        }
+        textarea {
+            overflow: hidden;
+            resize: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <img src='/static/AiShieldsLogoWordsOnly.jpg' alt='AiShields' style='height:20px'/>
+        <br/><h3>Chat History</h3>
+        {% for c in InputPromptHistory.keys() %}
+            {% set promptEntry = InputPromptHistory[c] %}  
+            <a href="chat?chat={{c}}">{{ promptEntry[0:50] }}</a>
+        {% endfor %}
+        <a href="/profile">Profile</a>
+        <a href="/logout">Logout</a>
+    </div>
+
+    <div class="hamburger-menu" onclick="toggleMobileSidebar()">
+        <div></div>
+        <div></div>
+        <div></div>
+    </div>
+
+    <div class="mobile-sidebar">
+        <select id="chatHistory" onblur="LoadChat()">
+            <option value="">Chat History</option>
+            {% for c in InputPromptHistory.keys() %}
+                {% set promptEntry = InputPromptHistory[c] %}  
+                <option value="{{c}}">{{ promptEntry[0:20] }}</option>
+            {% endfor %}
+        </select>
+        <a href="/profile">Profile</a>
+        <a href="/logout">Logout</a>
+    </div>
+
+    <div class="container">
+        <div class="center">
+            <img src='/static/AiShieldsShield.PNG' alt='AiShields' style='height:125px;width:125px'/>
+            <br/>
+            <img src='/static/AiShieldsLogoWordsOnly.jpg' alt='AiShields' style='height:35px;width:200px'/>
+            
+            <br/>
+            <h1>GenAI Chat</h1>
+            {% with messages = get_flashed_messages() %}
+            {% if messages %}
+            <ul>
+                {% for message in messages %}
+                <li>{{ message }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+            {% endwith %}
+        </div>
+
+        <h3>Welcome {{username}}!</h3>
+
+        <form name="chatform" method="POST" action="/chat">
+            <input type='hidden' name='csrf_token' value="{{ csrf_token() }}" />
+            <fieldset>
+                <div class="model-selector">
+                    <label for="api">API:</label>
+                    <select id="selectvalue" name="api">
+                        {% for n in apis %}
+                            {% if n["APIowner"] == "OpenAI" %}
+                            <optgroup label="{{n["APIowner"]}}">
+                                {% for m in n["TextGen"]["Models"] %}
+                                    <option value="{{n["APIowner"]}} {{m["details"]["jsonv"]}}" {% if m["Name"] == "GPT 4" %}selected{% endif %}>
+                                        {{ n["APIowner"] + ' ' + n["TextGen"]["Name"] + ' ' + m["Name"] }}
+                                    </option>
+                                {% endfor %}
+                            </optgroup>
+                            {% elif n["APIowner"] == "Anthropic" %}
+                            <optgroup label="Anthropic">
+                                {% for o in n["TextGen"]["Models"] %}
+                                    <option value="{{n["APIowner"]}} {{o["details"]["jsonv"]}}">
+                                        {{ n["APIowner"] + ' ' + n["TextGen"]["Name"] + ' ' + o["Name"] }}
+                                    </option>
+                                {% endfor %}
+                            </optgroup>
+                            {% else %}
+                            <optgroup label="{{n["APIowner"]}}">
+                                {% for p in n["TextGen"]["Models"] %}
+                                    <option value="{{n["APIowner"]}} {{p["details"]["jsonv"]}}">
+                                        {{ n["APIowner"] + ' ' + n["TextGen"]["Name"] + ' ' + p["Name"] }}
+                                    </option>
+                                {% endfor %}
+                            </optgroup>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <label for="role">Role:</label>
+                <select id="selectrole" name="role">
+                    <option value='system'>System</option>
+                    <option value='user' selected>User</option>
+                    <option value='assistant'>Assistant</option>
+                    <option value='function'>Function</option>
+                    <option value='tool'>Tool</option>
+                </select>
+
+                <label for="storetoken">Store Token?</label>
+                <select id="selectstore" name="storetoken">
+                    <option value="No" selected>No</option>
+                    <option value="Yes">Yes</option>
+                </select>
+
+                <label for="apitoken">Api Token:</label>
+                <input type="password" name="apitoken" required>
+
+                <label for="inputprompt">Prompt:</label>
+                <textarea id="inputprompt" name="inputprompt" rows="4" cols="50" required oninput="adjustTextarea(this)">{{ inputprompt }}</textarea>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                <input type="hidden" name="email" value="{{ email }}" />
+                <input type="hidden" name="username" value="{{ username }}" />
+                <div class="center">
+                    <input id="btnChat" type="submit" value="Chat" class="button-primary">
+                </div>
+            </fieldset>
+        </form>
+
+        {% if output %}
+        <div class="center">
+            <h2>Raw Input:</h2>
+            <textarea id="rawInput" name="rawInput" rows="4" cols="50" required oninput="adjustTextarea(this)">
+                {% if rawInput != none %}
+                    {{ rawInput }}
+                {% endif %}
+            </textarea>
+            <h2>Pre-Processed Input:</h2>
+            <textarea id="preProcStr" name="preProcStr" rows="4" cols="50" required oninput="adjustTextarea(this)">
+                {% if preProcStr != none %}
+                    {{ preProcStr }}
+                {% endif %}
+            </textarea>
+            <h2>Raw GenAI Output:</h2>
+            <textarea id="rawResponse" name="rawResponse" rows="4" cols="50" required oninput="adjustTextarea(this)">
+                {% if rawResponse != none %}
+                    {{ rawResponse }}
+                {% endif %}
+            </textarea>
+            <h2>Post-Processed GenAI Output:</h2>
+            <textarea id="response" name="response" rows="4" cols="50" required oninput="adjustTextarea(this)">
+                {% if response != none %}
+                    {{ response }}
+                {% endif %}
+            </textarea>
+        </div>
+        {% endif %}
+
+        {% if output %}
+        <div class="center">
+            <h2>AiShields Report</h2>
+            <p>Report ID: {{ findings[0].id }}</p><hr/>
+            {% for finding in findings %}
+            <p>Category: {{ finding.category }}</p><br/>
+            {{ finding.details }}
+            <br/><hr/><br/>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+
+    <script>
+        function toggleMobileSidebar() {
+            var sidebar = document.querySelector('.mobile-sidebar');
+            sidebar.style.display = sidebar.style.display === 'flex' ? 'none' : 'flex';
+        }
+
+        function LoadChat() {
+            var queryString = document.getElementById("chatHistory").value;
+            var newUrl;
+            if (queryString.indexOf("@") > 0) {
+                newUrl = window.location.origin + "/profile/" + "?profile=" + queryString;
+            } else {
+                newUrl = window.location.origin + window.location.pathname + "?chat=" + queryString;
+            }
+            window.location.href = newUrl;
+        }
+
+        function adjustTextarea(o) {
+            o.style.height = "1px";
+            o.style.height = (o.scrollHeight) + "px";
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('textarea').forEach(function(textarea) {
+                adjustTextarea(textarea);
+            });
+        });
+    </script>
+
+</body>
+</html>
