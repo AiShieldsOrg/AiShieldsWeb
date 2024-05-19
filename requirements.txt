@@ -19,7 +19,6 @@ Jinja2==3.1.4
 MarkupSafe==2.1.5
 netifaces==0.11.0
 openai==1.26.0
-pickle==3.8
 playwright==1.43.0
 presidio-analyzer==2.2.354
 presidio-anonymizer==2.2.354
@@ -47,4 +46,4 @@ scikit_learn==1.4.2
 spacy>=3.0.0
 https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.7.1/en_core_web_lg-3.7.1-py3-none-any.whl#sha256=ab70aeb6172cde82508f7739f35ebc9918a3d07debeed637403c8f794ba3d3dc
 sentence-transformers==2.1.0
-torch==1.10.0
+torch==1.11.0
