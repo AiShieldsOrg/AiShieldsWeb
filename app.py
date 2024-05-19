@@ -881,26 +881,7 @@ def getMDOSreport(input:InputPrompt):
         logging.error('An error occurred while generating the MDOS report: %s', err)
         flash(err)
 
-
 def aishields_sanitize_input(input:InputPrompt):
-      try: #now sanitize for Prompt Injection
-      strPreProcInput = ""
-      strRawInputPrompt = input.inputPrompt
-  
-  
-  
-      #sensitive data sanitization:
-      # now sanitize for privacy protected data
-      sds = SensitiveDataSanitizer()
-      strSensitiveDataSanitized = sds.sanitize_input(input_content=strRawInputPrompt)           
-      
-      
-      strPreProcInput += strRawInputPrompt    
-      
-      #now assess for Overreliance
-      return strPreProcInput
-          #sensitive data sanitization:
-          # now sanitize for privacy protected data
       try:
           strPreProcInput = ""
           strRawInputPrompt = input.inputPrompt
@@ -914,10 +895,6 @@ def aishields_sanitize_input(input:InputPrompt):
       except Exception as err:
           logging.error('An error occurred during input sanitization: %s', err)
           flash(err) 
-  except Exception as err:
-      logging.error('An error occurred during input sanitization: %s', err)
-      flash(err)
-
 
 def aishields_overreliance_inputfunc(input:InputPrompt, preproc:PreProcInputPrompt):
         #sensitive data sanitization:
