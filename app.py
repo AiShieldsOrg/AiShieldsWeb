@@ -1,33 +1,30 @@
-from flask import Flask, request, abort,render_template, redirect, url_for, flash
+from logging.handlers import RotatingFileHandler
+from flask import Flask, abort, request, redirect, url_for, render_template, flash, session
+from forms import LoginForm  # Import the form class
 from flask_wtf import CSRFProtect
 import bleach
-from dotenv import load_dotenv
-import os
+from mdos.mdos_sanitizer import PromptAnalyzer,prompt
 from markupsafe import escape
 from dateutil.relativedelta import relativedelta
 import datetime
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import DateTime,Column, ForeignKey, BigInteger,NVARCHAR,Integer, Table, desc, UniqueConstraint
+from sqlalchemy import DateTime, Column, ForeignKey, BigInteger, NVARCHAR, Integer, Table, desc, UniqueConstraint
 from sqlalchemy.orm import relationship, backref
 from sqlalchemy.ext.declarative import declarative_base
-from self_protection import protect,sanitize_input,getHash,encStandard,decStandard  
+from self_protection import protect, sanitize_input, getHash, encStandard, decStandard  
 import openai
+import logging
 import anthropic
 import uuid
-from prompt_injection.prompt_injection_sanitizer import prompt_injection_score
 from sensitive_information.sensitive_data_sanitizer import SensitiveDataSanitizer
-from mdos.mdos_sanitizer import PromptAnalyzer
 from aishieldsemail import send_secure_email
 import secrets
-from insecure_out_handling import InsecureOutputSanitizer
-from overreliance.overreliance_data_sanitizer import OverrelianceDataSanitizer as ODS
+from prompt_injection_sanitizer.prompt_injection_sanitizer import Prompt_Injection_Sanitizer,pre_proecess_prompt,prompt_injection_score
+from insecure_output_handling.insecure_output_handling import InsecureOutputSanitizer
+from overreliance.overreliance_data_sanitizer1 import OverrelianceDataSanitizer as ODS
 import json
 import netifaces as nif
 import os
-import nltk
-from nltk.corpus import stopwords
-from dotenv import load_dotenv
-
 load_dotenv()
 
 app = Flask(__name__)
@@ -48,7 +45,7 @@ smtp_p = str(decStandard(smtpp))
 smtp_u = str(decStandard(smtpu))
 db = SQLAlchemy(app)
 csrf = CSRFProtect(app)
-handler = RotatingFileHandler('/users/youraccount/documents/aishields.log', maxBytes=10000000, backupCount=5)
+handler = RotatingFileHandler(os.getenv('AiShields_Log_File_Path'), maxBytes=10000000, backupCount=5)
 handler.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
@@ -66,7 +63,7 @@ apis = [{"APIowner":"OpenAI","TextGen": {"Name":"ChatGPT","Models":[
 
 def app_context():
     app = Flask(__name__)
-    strAppKey = os.getenv('STR_APP_KEY')
+    strAppKey = decStandard(os.getenv('SECRET_KEY')
     app.secret_key = strAppKey.encode(str="utf-8")
     csrf = CSRFProtect(app)
     with app.app_context():
@@ -144,12 +141,12 @@ class RequestLog(db.Model):
     #     self.url = url
 
     @staticmethod
-    def get_request_count(client_id):
+    def get_request_count(client_ip):
         # Calculate the datetime 10 minutes ago
         ten_minutes_ago = datetime.datetime.now() - datetime.timedelta(minutes=10)
         
         # Filter requests based on client_id and creation date
-        return RequestLog.query.filter_by(client_id=client_id).filter(RequestLog.create_date >= ten_minutes_ago).count()
+        return RequestLog.query.filter_by(client_ip=client_ip).filter(RequestLog.create_date >= ten_minutes_ago).count()
 
 class User(db.Model):
     __tablename__ = "users"
@@ -330,49 +327,47 @@ def mac_for_ip(ip):
 
 @app.before_request
 def before_request():
-  try:
-    public_routes = ['login', 'newaccount', 'forgot', 'verifyemail', 'static','reset']
-    if 'logged_in' not in session and request.endpoint not in public_routes:
+    try:
+        public_routes = ['login', 'newaccount', 'forgot', 'verifyemail', 'static','reset']
+        if 'logged_in' not in session and request.endpoint not in public_routes:
             return redirect(url_for('login'))
+        # Save the request data for MDOS protection
+        macAddress = mac_for_ip(request.remote_addr)
+        if macAddress is None:
+            macAddress = "?"
+        client_info = Clients(
+            IPaddress=request.remote_addr,
+            MacAddress=macAddress
+        )
+        db.session.add(client_info)
+        db.session.commit()
+        db.session.flush()
+        request_data = RequestLog(
+            client_id=client_info.id, 
+            client_ip=client_info.IPaddress, 
+            request_type=request.method,
+            Headers=repr(dict(request.headers)),
+            Body=request.data.decode('utf-8'),
+            url=request.url
+        )
+        db.session.add(request_data)
+        db.session.commit()
+
+        # MDOS (Model Denial of Service entrypoint)
+        # James Yu can add code here to handle MDOS protection
+        client_id = request.remote_addr
+        request_count = RequestLog.get_request_count(client_id)
         
-    # Save the request data for MDOS protection
-    macAddress = mac_for_ip(request.remote_addr)
-    if macAddress is None:
-        macAddress = "?"
-    client_info = Clients(
-        IPaddress=request.remote_addr,
-        MacAddress=macAddress
-    )
-    db.session.add(client_info)
-    db.session.commit()
-    db.session.flush(objects[client_info])
-    request_data = RequestLog(
-        client_id=client_info.id, 
-        client_ip=client_info.IPaddress, 
-        request_type=request.method,
-        Headers=repr(dict(request.headers)),
-        Body=request.data.decode('utf-8'),
-        url=request.url
-    )
-    db.session.add(request_data)
-    db.session.commit()
-    db.session.flush(objects[request_data])
-
-    # MDOS (Model Denial of Service entrypoint)
-    # James Yu can add code here to handle MDOS protection
-    client_id = request.remote_addr
-    request_count = RequestLog.get_request_count(client_id)
+        if request_count >= 500:  # Adjust the limit as needed
+            flash('Too many requests, please try again later', 'danger')
+            print(request_count)
+            abort(429)  # Too Many Requests status code
+    except Exception as err:
+        logging.error('An error occurred during login: %s', err)
+        flash("An error occurred. Please try again.")
+        return render_template('login.html', form=LoginForm())
     
-    if request_count >= 500:  # Adjust the limit as needed
-        flash('Too many requests, please try again later', 'danger')
-        print(request_count)
-        abort(429)  # Too Many Requests status code
-  except Exception as err:
-    logging.error('An error occurred during login: %s', err)
-    flash("An error occurred. Please try again.")
-    return render_template('login.html', form=LoginForm())
 
-    
 @app.route("/",methods=['GET','POST'])
 def home():
     try:
@@ -381,7 +376,6 @@ def home():
         logging.error('An error occurred during home request: %s', err)
         flash("An error occurred. Please try again.")
         return render_template('index.html')
-
 
 @app.route('/index', methods=['GET', 'POST'])
 def index():
@@ -811,6 +805,7 @@ def chat():
                 )
                 postProcPromptObj = aishields_postprocess_output(postProcPromptObj)
                 preprocessedPrompt = aishields_overreliance_postProc(rawInput, preprocessedPrompt, postProcPromptObj, rawInput)
+                promptInjectionReport = aishields_promptInjection_check(rawInputObj)
                 db.session.add(postProcPromptObj)
                 db.session.commit()
                 db.session.flush(objects=[postProcPromptObj])
@@ -828,7 +823,7 @@ def chat():
                     rawResponse_id=rawOutputObj.id,
                     postProcResponse_id=postProcPromptObj.id,
                     SensitiveDataSanitizerReport=preProcObj.SensitiveDataSanitizerReport,
-                    PromptInjectionReport=preProcObj.PromptInjectionReport,
+                    PromptInjectionReport=promptInjectionReport,
                     OverrelianceReport=preProcObj.OverrelianceReport,
                     InsecureOutputReportHandling=postProcPromptObj.InsecureOutputHandlingReport,
                     MDOSreport=getMDOSreport(rawInputObj),
@@ -855,7 +850,7 @@ def chat():
     except Exception as err:
         logging.error('An error occurred during chat processing: %s', err)
         flash(err)
-        return render_template('login.html', form=LoginForm())
+        return render_template('chat.html', rawInput=rawInput.inputPrompt, preProcStr=preprocPrompt.preProcInputPrompt, rawResponse=rawOutputStr, InputPromptHistory=chathistory, PostProcResponseHistory=postProcRespStr, apis=apis, email=session['email'], username=session['username'], response=postProcRespStr, findings=findings, output=True, logged_in=True)
 
 def getMDOSreport(input:InputPrompt):
         #sensitive data sanitization:
@@ -880,21 +875,41 @@ def getMDOSreport(input:InputPrompt):
     except Exception as err:
         logging.error('An error occurred while generating the MDOS report: %s', err)
         flash(err)
+        #return render_template('login.html', form=LoginForm())
+ 
 
 def aishields_sanitize_input(input:InputPrompt):
-      try:
-          strPreProcInput = ""
-          strRawInputPrompt = input.inputPrompt
-          sanitizedInput = sanitize_input(strRawInputPrompt)
-          sds = SensitiveDataSanitizer()
-          strSensitiveDataSanitized = sds.sanitize_input(input_content=sanitizedInput)           
-          strPreProcInput += str(strSensitiveDataSanitized)
-          #now sanitize for Prompt Injection
-          #now assess for Overreliance
-          return strPreProcInput
-      except Exception as err:
-          logging.error('An error occurred during input sanitization: %s', err)
-          flash(err) 
+        #sensitive data sanitization:
+        # now sanitize for privacy protected data
+    try:
+        strPreProcInput = ""
+        strRawInputPrompt = input.inputPrompt
+        sanitizedInput = sanitize_input(strRawInputPrompt)
+
+        sds = SensitiveDataSanitizer()
+        strSensitiveDataSanitized = sds.sanitize_input(input_content=sanitizedInput)           
+        strPreProcInput += str(strSensitiveDataSanitized)
+        #now sanitize for Prompt Injection
+        #now assess for Overreliance
+        return strPreProcInput
+    except Exception as err:
+        logging.error('An error occurred during input sanitization: %s', err)
+        flash(err)
+        
+
+def aishields_promptInjection_check(input:InputPrompt):
+        #sensitive data sanitization:
+        # now sanitize for privacy protected data
+    try:
+        pio = Prompt_Injection_Sanitizer(os.getenv('PROMPT_INJ_MODEL_PATH'),os.getenv('PROMPT_INJ_VECTORIZER_PATH'))
+        promptInjectionOutput = dict[str,int](prompt_injection_score(str(input.inputPrompt)))
+        promptInjOutputString = ""
+        for key in promptInjectionOutput.keys():
+            promptInjOutputString += str(key) + " : " + str(promptInjectionOutput[key]) + " "
+        return promptInjOutputString
+    except Exception as err:
+        logging.error('An error occurred during prompt injection check: %s', err)
+        flash(err)
 
 def aishields_overreliance_inputfunc(input:InputPrompt, preproc:PreProcInputPrompt):
         #sensitive data sanitization:
@@ -914,7 +929,8 @@ def aishields_overreliance_inputfunc(input:InputPrompt, preproc:PreProcInputProm
         return overreliance_keyphrase_data_list
     except Exception as err:
         logging.error('An error occurred durring overreliance input processing: %s', err)
-        flash(err)  
+        flash(err)
+          
 
 def aishields_overreliance_postProc(input:ApiResponse,preproc:PreProcInputPrompt, postproc:PostProcResponse,rawinput:InputPrompt):
         #sensitive data sanitization:
@@ -934,7 +950,8 @@ def aishields_overreliance_postProc(input:ApiResponse,preproc:PreProcInputPrompt
         return preproc
     except Exception as err:
         logging.error('An error occurred during overreliance output processing: %s', err)
-        flash(err)  
+        flash(err)
+         
 
 
 def aishields_postprocess_output(postProcResponseObj:PostProcResponse):
@@ -943,7 +960,6 @@ def aishields_postprocess_output(postProcResponseObj:PostProcResponse):
         #strPostProcessedOutput = sanitize_input(postProcResponseObj.rawOutputResponse)
         output_sanitizer=InsecureOutputSanitizer()
         strPostProcessedOutput, outputSanitizationReport = output_sanitizer.generate_json_report(postProcResponseObj.rawOutputResponse)
-        
         postProcResponseObj.postProcOutputResponse = escape(str(strPostProcessedOutput))
         postProcResponseObj.InsecureOutputHandlingReport = outputSanitizationReport
         #handle and sanitize raw output
@@ -951,7 +967,8 @@ def aishields_postprocess_output(postProcResponseObj:PostProcResponse):
         return postProcResponseObj
     except Exception as err:
         logging.error('An error occurred during post processing: %s', err)
-        flash(err) 
+        flash(err)
+         
 
 def aishields_store_cred(input:Credential):
     try:
@@ -964,18 +981,7 @@ def aishields_store_cred(input:Credential):
     except Exception as err:
         logging.error('An error occurred while attempting to store creds: %s', err)
         flash(err)
-      
-  
-def aishields_promptInjection_check(input:InputPrompt):
-        #sensitive data sanitization:
-        # now sanitize for privacy protected data
-    try:
-        promptInjectionOutput = {}
-        #now sanitize for Prompt Injection PASS
-        return promptInjectionOutput
-    except Exception as err:
-        logging.error('An error occurred during prompt injection check: %s', err)
-        flash(err)
+          
         
 def aishields_get_string_diff(strA,strB):
     try:
@@ -986,12 +992,11 @@ def aishields_get_string_diff(strA,strB):
             res=str(strB).replace(str(strA),'')
         return res
     except Exception as err:
-        print('An error occured: ' + str(err))  
+        logging.error('An error occurred during string diff: %s', err)
+        flash(err) 
+
 
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
         app.run(debug=True)
-        
-        
-
