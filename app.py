@@ -21,10 +21,13 @@ from aishieldsemail import send_secure_email
 import secrets
 from prompt_injection_sanitizer.prompt_injection_sanitizer import Prompt_Injection_Sanitizer,pre_proecess_prompt,prompt_injection_score
 from insecure_output_handling.insecure_output_handling import InsecureOutputSanitizer
-from overreliance.overreliance_data_sanitizer1 import OverrelianceDataSanitizer as ODS
+from overreliance.overreliance_data_sanitizer import OverrelianceDataSanitizer as ODS
 import json
 import netifaces as nif
 import os
+from dotenv import load_dotenv
+import nltk
+
 load_dotenv()
 
 app = Flask(__name__)
@@ -63,7 +66,7 @@ apis = [{"APIowner":"OpenAI","TextGen": {"Name":"ChatGPT","Models":[
 
 def app_context():
     app = Flask(__name__)
-    strAppKey = decStandard(os.getenv('SECRET_KEY')
+    strAppKey = decStandard(os.getenv('SECRET_KEY'))
     app.secret_key = strAppKey.encode(str="utf-8")
     csrf = CSRFProtect(app)
     with app.app_context():
