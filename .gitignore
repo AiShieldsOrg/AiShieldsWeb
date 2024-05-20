@@ -8,3 +8,4 @@ databases/
 *.pem
 .env
 instance/aiShieldsSqlite3DB.db
+*.log
