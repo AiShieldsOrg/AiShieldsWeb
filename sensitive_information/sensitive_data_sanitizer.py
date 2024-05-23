@@ -10,7 +10,7 @@ class SensitiveDataSanitizer:
         self.analyzer = AnalyzerEngine()
         self.anonymizer = AnonymizerEngine()
 
-    def sanitize_input(self, input_content: str) -> str:
+    def sanitize_text(self, input_content: str) -> str:
         sanitized_content = input_content
         for entity, details in self.sensitive_data.items():
             if entity == "OTHER":
