@@ -807,6 +807,7 @@ def chat():
                     created_date=datetime.datetime.now(datetime.timezone.utc)
                 )
                 postProcPromptObj = aishields_postprocess_output(postProcPromptObj)
+                postProcPromptObj.postProcOutputResponse = aishields_sanitize_output(postProcPromptObj)
                 preprocessedPrompt = aishields_overreliance_postProc(rawInput, preprocessedPrompt, postProcPromptObj, rawInput)
                 promptInjectionReport = aishields_promptInjection_check(rawInputObj)
                 db.session.add(postProcPromptObj)
@@ -844,7 +845,6 @@ def chat():
                     {"category": "MDOS", "details": aiShieldsReportObj.MDOSreport, "id": aiShieldsReportObj.MDOSreport},
                     {"category": "Insecure Output Handling", "details": aiShieldsReportObj.InsecureOutputReportHandling, "id": aiShieldsReportObj.internalPromptID}
                 ]
-
                 InputPromptHistory = (db.session.query(InputPrompt).filter(InputPrompt.user_id == userid).order_by(desc(InputPrompt.created_date)))
                 chathistory = {prmpt.internalPromptID: prmpt.inputPrompt for prmpt in InputPromptHistory}
                 PostProcResponseHistory = (db.session.query(PostProcResponse).filter(PostProcResponse.user_id == userid))
@@ -890,14 +890,26 @@ def aishields_sanitize_input(input:InputPrompt):
         sanitizedInput = sanitize_input(strRawInputPrompt)
 
         sds = SensitiveDataSanitizer()
-        strSensitiveDataSanitized = sds.sanitize_input(input_content=sanitizedInput)           
+        strSensitiveDataSanitized = sds.sanitize_text(input_content=sanitizedInput)
         strPreProcInput += str(strSensitiveDataSanitized)
-        #now sanitize for Prompt Injection
-        #now assess for Overreliance
         return strPreProcInput
     except Exception as err:
         logging.error('An error occurred during input sanitization: %s', err)
         flash(err)
+
+
+def aishields_sanitize_output(postProcResponseObj: PostProcResponse):
+        try:
+            strPreProcOutput = ""
+            strRawOutputPrompt = postProcResponseObj.rawOutputResponse
+            sds = SensitiveDataSanitizer()
+            strSensitiveDataSanitized = sds.sanitize_text(input_content=strRawOutputPrompt)
+            strPreProcOutput += str(strSensitiveDataSanitized)
+            return strPreProcOutput
+        except Exception as err:
+            logging.error('An error occurred during output sanitization: %s', err)
+            flash(err)
+
         
 
 def aishields_promptInjection_check(input:InputPrompt):
@@ -961,7 +973,7 @@ def aishields_postprocess_output(postProcResponseObj:PostProcResponse):
     #insecure output handing
     try:
         #strPostProcessedOutput = sanitize_input(postProcResponseObj.rawOutputResponse)
-        output_sanitizer=InsecureOutputSanitizer()
+        output_sanitizer = InsecureOutputSanitizer()
         strPostProcessedOutput, outputSanitizationReport = output_sanitizer.generate_json_report(postProcResponseObj.rawOutputResponse)
         postProcResponseObj.postProcOutputResponse = escape(str(strPostProcessedOutput))
         postProcResponseObj.InsecureOutputHandlingReport = outputSanitizationReport
