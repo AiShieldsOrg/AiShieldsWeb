@@ -913,10 +913,7 @@ def aishields_sanitize_output(postProcResponseObj: PostProcResponse):
         
 
 def aishields_promptInjection_check(input:InputPrompt):
-        #sensitive data sanitization:
-        # now sanitize for privacy protected data
     try:
-        pio = Prompt_Injection_Sanitizer(os.getenv('PROMPT_INJ_MODEL_PATH'),os.getenv('PROMPT_INJ_VECTORIZER_PATH'))
         promptInjectionOutput = dict[str,int](prompt_injection_score(str(input.inputPrompt)))
         promptInjOutputString = ""
         for key in promptInjectionOutput.keys():
