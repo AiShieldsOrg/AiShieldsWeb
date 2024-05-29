@@ -1,15 +1,18 @@
 from logging.handlers import RotatingFileHandler
 from flask import Flask, abort, request, redirect, url_for, render_template, flash, session
 from forms import LoginForm  # Import the form class
+from authlib.integrations.flask_client import OAuth
 from flask_wtf import CSRFProtect
 import bleach
+from overreliance.overreliance_script import overreliance_pipeline as op
 from mdos.mdos_sanitizer import PromptAnalyzer,prompt
 from markupsafe import escape
 from dateutil.relativedelta import relativedelta
 import datetime
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import DateTime, Column, ForeignKey, BigInteger, NVARCHAR, Integer, Table, desc, UniqueConstraint
-from sqlalchemy.orm import relationship, backref
+from sqlalchemy import DateTime, Column, ForeignKey, BigInteger, NVARCHAR, Integer, Table, desc, UniqueConstraint,create_engine, MetaData, Column, String
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import relationship, sessionmaker, backref
 from sqlalchemy.ext.declarative import declarative_base
 from self_protection import protect, sanitize_input, getHash, encStandard, decStandard  
 import openai
@@ -25,35 +28,38 @@ from overreliance.overreliance_data_sanitizer import OverrelianceDataSanitizer a
 import json
 import netifaces as nif
 import os
-from dotenv import load_dotenv
-import nltk
+import security_config as sc
 
-load_dotenv()
 
 app = Flask(__name__)
-
-nltk.download("stopwords")
-
-app.config['SECRET_KEY'] = str(decStandard(os.getenv('SECRET_KEY')))
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI')
-email_from = os.getenv('EMAIL_FROM')
-smtpserver = os.getenv('SMTP_SERVER')
-smtpport = os.getenv('SMTP_PORT')
-smtpp = os.getenv('SMTP_PASSWORD')
-smtpu = os.getenv('SMTP_USER')
-
+app.config['SECRET_KEY'] = str(decStandard(sc.SECRET_KEY))
+app.config['SQLALCHEMY_DATABASE_URI'] = sc.SQLALCHEMY_DATABASE_URI
+app.config['GOOGLE_CLIENT_ID'] = sc.GOOGLE_CLIENT_ID
+app.config['GOOGLE_CLIENT_SECRET'] = sc.GOOGLE_CLIENT_SECRET
+email_from = sc.EMAIL_FROM
+smtpserver = sc.SMTP_SERVER
+smtpport = sc.SMTP_PORT
+smtpp = sc.SMTP_PASSWORD
+smtpu = sc.SMTP_USER
 smtp_server = str(decStandard(smtpserver))
 smtp_port = str(decStandard(smtpport))
 smtp_p = str(decStandard(smtpp))
 smtp_u = str(decStandard(smtpu))
 db = SQLAlchemy(app)
 csrf = CSRFProtect(app)
-handler = RotatingFileHandler(os.getenv('AiShields_Log_File_Path'), maxBytes=10000000, backupCount=5)
+oauth = OAuth(app)
+handler = RotatingFileHandler(sc.LOG_PATH, maxBytes=10000000, backupCount=5)
 handler.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
 app.logger.addHandler(handler)
 app.logger.setLevel(logging.DEBUG)
+# Connection URL
+DATABASE_URI = sc.SQLALCHEMY_DATABASE_URI
+
+
+# Using declarative_base
+Base = declarative_base()
 
 apis = [{"APIowner":"OpenAI","TextGen": {"Name":"ChatGPT","Models":[
                 {"Name":"GPT 4","details":{ "uri": "https://api.openai.com/v1/chat/completions","jsonv":"gpt-4"}},
@@ -63,16 +69,30 @@ apis = [{"APIowner":"OpenAI","TextGen": {"Name":"ChatGPT","Models":[
                 {"APIowner":"Anthropic","TextGen": {"Name":"Claude","Models":[
                 {"Name":"Claude - most recent","details":{"uri": "https://api.anthropic.com/v1/messages","jsonv":"anthropic-version: 2023-06-01"}}
                  ]}}]
+google = oauth.register(
+    name='google',
+    client_id=app.config['GOOGLE_CLIENT_ID'],
+    client_secret=app.config['GOOGLE_CLIENT_SECRET'],
+    access_token_url='https://accounts.google.com/o/oauth2/token',
+    access_token_params=None,
+    authorize_url='https://accounts.google.com/o/oauth2/auth',
+    authorize_params=None,
+    api_base_url='https://www.googleapis.com/oauth2/v1/',
+    userinfo_endpoint='https://openidconnect.googleapis.com/v1/userinfo',  # This API returns user details.
+    client_kwargs={'scope': 'openid email profile'},
+)
 
 def app_context():
     app = Flask(__name__)
-    strAppKey = decStandard(os.getenv('SECRET_KEY'))
+    #setup engine and session
+    strAppKey = decStandard(sc.STR_APP_KEY)
     app.secret_key = strAppKey.encode(str="utf-8")
     csrf = CSRFProtect(app)
     with app.app_context():
         yield
 
-Base = declarative_base()
+
+#Base = declarative_base()
 
 user_prompt_api_model = Table(
     "user_prompt_api_model",
@@ -154,6 +174,7 @@ class RequestLog(db.Model):
 class User(db.Model):
     __tablename__ = "users"
     id = db.Column(BigInteger, primary_key=True)
+    provider = db.Column(NVARCHAR,default="AiShields")
     username = db.Column(NVARCHAR)
     first_name = db.Column(NVARCHAR)
     last_name = db.Column(NVARCHAR)
@@ -331,7 +352,7 @@ def mac_for_ip(ip):
 @app.before_request
 def before_request():
     try:
-        public_routes = ['login', 'newaccount', 'forgot', 'verifyemail', 'static','reset']
+        public_routes = ['login','dump', 'newaccount', 'forgot', 'verifyemail', 'static','reset']
         if 'logged_in' not in session and request.endpoint not in public_routes:
             return redirect(url_for('login'))
         # Save the request data for MDOS protection
@@ -765,7 +786,7 @@ def chat():
                 client = openai.Client(api_key=str(strTempApiKey))
                 stream = client.chat.completions.create(
                     model=strModel,
-                    messages=[{"role": strRole.lower(), "content": inputprompt}],
+                    messages=[{"role": strRole.lower(), "content": preprocessedPrompt.preProcInputPrompt}],
                     stream=True,
                 )
                 strRawOutput = ""
@@ -807,7 +828,7 @@ def chat():
                     created_date=datetime.datetime.now(datetime.timezone.utc)
                 )
                 postProcPromptObj = aishields_postprocess_output(postProcPromptObj)
-                postProcPromptObj.postProcOutputResponse = aishields_sanitize_output(postProcPromptObj)
+                #postProcPromptObj.postProcOutputResponse = aishields_sanitize_output(postProcPromptObj)
                 preprocessedPrompt = aishields_overreliance_postProc(rawInput, preprocessedPrompt, postProcPromptObj, rawInput)
                 promptInjectionReport = aishields_promptInjection_check(rawInputObj)
                 db.session.add(postProcPromptObj)
@@ -845,6 +866,7 @@ def chat():
                     {"category": "MDOS", "details": aiShieldsReportObj.MDOSreport, "id": aiShieldsReportObj.MDOSreport},
                     {"category": "Insecure Output Handling", "details": aiShieldsReportObj.InsecureOutputReportHandling, "id": aiShieldsReportObj.internalPromptID}
                 ]
+
                 InputPromptHistory = (db.session.query(InputPrompt).filter(InputPrompt.user_id == userid).order_by(desc(InputPrompt.created_date)))
                 chathistory = {prmpt.internalPromptID: prmpt.inputPrompt for prmpt in InputPromptHistory}
                 PostProcResponseHistory = (db.session.query(PostProcResponse).filter(PostProcResponse.user_id == userid))
@@ -853,7 +875,16 @@ def chat():
     except Exception as err:
         logging.error('An error occurred during chat processing: %s', err)
         flash(err)
-        return render_template('chat.html', rawInput=rawInput.inputPrompt, preProcStr=preprocPrompt.preProcInputPrompt, rawResponse=rawOutputStr, InputPromptHistory=chathistory, PostProcResponseHistory=postProcRespStr, apis=apis, email=session['email'], username=session['username'], response=postProcRespStr, findings=findings, output=True, logged_in=True)
+        return render_template('chat.html', rawInput="", preProcStr='', rawResponse='', InputPromptHistory=chathistory, PostProcResponseHistory='', apis=apis, email=session['email'], username=session['username'], response='', findings=[], output=True, logged_in=True)
+
+# @app.route('/dump')
+# def dump_database():
+#     dump_file = 'AiShields-database_dump.sql'
+#     with open(dump_file, 'w', encoding='utf-8') as f:
+#         for line in db.engine.raw_connection().iterdump():
+#             f.write(f'{line}\n')
+#     return f"Database dump created at {os.path.abspath(dump_file)}"
+
 
 def getMDOSreport(input:InputPrompt):
         #sensitive data sanitization:
@@ -874,7 +905,7 @@ def getMDOSreport(input:InputPrompt):
             "is_expensive": is_expensive,
             "complexity_metric": complexity
         }
-        return str(result)
+        return f"is_expensive: {result["is_expensive"]}<br> complexity_metric: {result["complexity_metric"]}"  
     except Exception as err:
         logging.error('An error occurred while generating the MDOS report: %s', err)
         flash(err)
@@ -890,14 +921,15 @@ def aishields_sanitize_input(input:InputPrompt):
         sanitizedInput = sanitize_input(strRawInputPrompt)
 
         sds = SensitiveDataSanitizer()
-        strSensitiveDataSanitized = sds.sanitize_text(input_content=sanitizedInput)
+        strSensitiveDataSanitized = sds.sanitize_text(input_content=sanitizedInput)           
         strPreProcInput += str(strSensitiveDataSanitized)
+        #now sanitize for Prompt Injection
+        #now assess for Overreliance
         return strPreProcInput
     except Exception as err:
         logging.error('An error occurred during input sanitization: %s', err)
         flash(err)
-
-
+        
 def aishields_sanitize_output(postProcResponseObj: PostProcResponse):
         try:
             strPreProcOutput = ""
@@ -910,10 +942,11 @@ def aishields_sanitize_output(postProcResponseObj: PostProcResponse):
             logging.error('An error occurred during output sanitization: %s', err)
             flash(err)
 
-        
-
 def aishields_promptInjection_check(input:InputPrompt):
+        #sensitive data sanitization:
+        # now sanitize for privacy protected data
     try:
+        """ pio = Prompt_Injection_Sanitizer(sc.,"C:\\Users\\crossfire234\\Desktop\\WorkStuff\\BCAMP\\AiShields\\AiShieldsWeb-5-23-24\\prompt_injection_sanitizer\\models\\jailbreak_vectorizer.bin") """
         promptInjectionOutput = dict[str,int](prompt_injection_score(str(input.inputPrompt)))
         promptInjOutputString = ""
         for key in promptInjectionOutput.keys():
@@ -942,37 +975,30 @@ def aishields_overreliance_inputfunc(input:InputPrompt, preproc:PreProcInputProm
     except Exception as err:
         logging.error('An error occurred durring overreliance input processing: %s', err)
         flash(err)
-          
 
 def aishields_overreliance_postProc(input:ApiResponse,preproc:PreProcInputPrompt, postproc:PostProcResponse,rawinput:InputPrompt):
         #sensitive data sanitization:
         # now sanitize for privacy protected data
     try:
-        SITE_IGNORE_LIST = ["youtube.com"]
-        NUMBER_OF_SEARCHES = 4
-        NUMBER_OF_LINKS = 10
-        STOPWORD_LIST = ["*", "$"]
         
-        ods= ODS()
-        overreliance_keyphrase_data_list = ods.get_keyphrases_and_links(preproc.preProcInputPrompt,NUMBER_OF_SEARCHES,link_number_limit=NUMBER_OF_LINKS, stopword_list=STOPWORD_LIST)
-        overreliance_keyphrase_data_list = ods.get_articles(overreliance_keyphrase_data_list,site_ignore_list=SITE_IGNORE_LIST)
-        data_summary_list = ods.compare(overreliance_keyphrase_data_list,postproc.rawOutputResponse)
-        overreliance_string = str(f"score: {data_summary_list[0]['score']} of {data_summary_list[0]['link']}")
-        preproc.OverrelianceReport = overreliance_string
+        plot, summary = op(preproc.preProcInputPrompt,postproc.rawOutputResponse)
+        
+        preproc.OverrelianceReport = plot + " " + summary
         return preproc
     except Exception as err:
         logging.error('An error occurred during overreliance output processing: %s', err)
         flash(err)
-         
-
 
 def aishields_postprocess_output(postProcResponseObj:PostProcResponse):
     #insecure output handing
     try:
         #strPostProcessedOutput = sanitize_input(postProcResponseObj.rawOutputResponse)
-        output_sanitizer = InsecureOutputSanitizer()
+        output_sanitizer=InsecureOutputSanitizer()
         strPostProcessedOutput, outputSanitizationReport = output_sanitizer.generate_json_report(postProcResponseObj.rawOutputResponse)
+        
         postProcResponseObj.postProcOutputResponse = escape(str(strPostProcessedOutput))
+        
+        
         postProcResponseObj.InsecureOutputHandlingReport = outputSanitizationReport
         #handle and sanitize raw output
         #return post processed Output
