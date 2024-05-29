@@ -32,7 +32,9 @@ start_time = time.time()
 
 ods = ODS()
 
-keyphrase_data_list = ods.get_keyphrases_and_links(input_text, NUMBER_OF_SEARCHES,link_number_limit=NUMBER_OF_LINKS,stopword_list=STOPWORD_LIST)
+sorted_keyphrases = ods.get_keyphrases(input_text, stopword_list=STOPWORD_LIST)
+
+keyphrase_data_list = ods.get_links(sorted_keyphrases,search_number_limit=NUMBER_OF_SEARCHES,link_number_limit=NUMBER_OF_LINKS)
 
 keyphrase_data_list = ods.get_articles(keyphrase_data_list,site_ignore_list=SITE_IGNORE_LIST)
 
