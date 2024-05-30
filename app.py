@@ -698,7 +698,7 @@ def chat():
         InputPromptHistory = (db.session.query(InputPrompt).filter(InputPrompt.user_id == user.id))
         chathistory = {prmpt.internalPromptID: prmpt.inputPrompt for prmpt in InputPromptHistory}                           
         if request.method == 'GET':
-            if request.query_string is not None and request.query_string != "" and request.query_string.index(str("=").encode()) >0 and len(request.query_string.split('=')) >1:
+            if request.query_string is not None and request.query_string != "" and request.query_string.index(str("=").encode()) is not None and request.query_string.index(str("=").encode()) >0 and len(request.query_string.split('=')) >1:
                 chatId = request.query_string.decode('utf-8').split('=')[1]
                 rawInput = (db.session.query(InputPrompt).filter(InputPrompt.internalPromptID == str(chatId), InputPrompt.user_id == user.id).one_or_none())
                 if rawInput is not None:
