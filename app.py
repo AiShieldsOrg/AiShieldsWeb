@@ -694,13 +694,13 @@ def chat():
         if not session.get('logged_in'):
             return render_template('login',form=LoginForm())
 
-        user = (db.session.query(User).filter(User.email == session['email']).first())
+        user = (db.session.query(User).filter(User.email == session['email'],User.user_verified == 1).first())
         InputPromptHistory = (db.session.query(InputPrompt).filter(InputPrompt.user_id == user.id))
         chathistory = {prmpt.internalPromptID: prmpt.inputPrompt for prmpt in InputPromptHistory}                           
         if request.method == 'GET':
-            if request.query_string is not None and request.query_string != "" and request.query_string.index(str("=").encode()) is not None and request.query_string.index(str("=").encode()) >0 and len(request.query_string.split('=')) >1:
+            if request.query_string is not None and request.query_string.decode("utf-8") != "" and char2Check in request.query_string.decode("utf-8") and request.query_string.decode('utf-8').split('=').__len__()  > 1: #len(str(request.query_string).split("=")) >1:
                 chatId = request.query_string.decode('utf-8').split('=')[1]
-                rawInput = (db.session.query(InputPrompt).filter(InputPrompt.internalPromptID == str(chatId), InputPrompt.user_id == user.id).one_or_none())
+                rawInput = (db.session.query(InputPrompt).filter(InputPrompt.internalPromptID == chatId, InputPrompt.user_id == user.id).first())
                 if rawInput is not None:
                     preprocPrompt = (db.session.query(PreProcInputPrompt).filter(PreProcInputPrompt.internalPromptID == str(chatId)).one_or_none())
                     if preprocPrompt:
