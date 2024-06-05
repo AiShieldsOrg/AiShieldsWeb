@@ -62,12 +62,24 @@ DATABASE_URI = sc.SQLALCHEMY_DATABASE_URI
 Base = declarative_base()
 
 apis = [{"APIowner":"OpenAI","TextGen": {"Name":"ChatGPT","Models":[
+                {"Name":"GPT 4o","details":{ "uri": "https://api.openai.com/v1/chat/completions","jsonv":"gpt-4o"}},
                 {"Name":"GPT 4","details":{ "uri": "https://api.openai.com/v1/chat/completions","jsonv":"gpt-4"}},
                 {"Name":"GPT 4 Turbo Preview","details":{ "uri": "https://api.openai.com/v1/chat/completions","jsonv":"gpt-4-turbo-preview" }},
                 {"Name":"GPT 3.5 Turbo","details":{"uri":"https://api.openai.com/v1/chat/completions","jsonv": "gpt-3.5-turbo"}}
                 ]}},
                 {"APIowner":"Anthropic","TextGen": {"Name":"Claude","Models":[
-                {"Name":"Claude - most recent","details":{"uri": "https://api.anthropic.com/v1/messages","jsonv":"anthropic-version: 2023-06-01"}}
+                {"Name":"Claude - most recent","details":{"uri": "https://api.anthropic.com/v1/messages","jsonv":"claude-3-opus-20240229"}},
+                ]}},
+                {"APIowner":"Google","TextGen": {"Name":"Gemini","Models":[
+                {"Name":"Gemini 1.5 Pro","details":{"uri": "https://generativelanguage.googleapis.com/v1/{model=models/gemini-1.5-pro}:generateContent","jsonv":"gemini-1.5-pro"}},
+                {"Name":"Gemini 1.5 Flash","details":{"uri": "https://generativelanguage.googleapis.com/v1/{model=models/gemini-1.5-flash}:generateContent","jsonv":"gemini-1.5-flash"}},
+                {"Name":"Gemini 1.0 Pro","details":{"uri": "https://generativelanguage.googleapis.com/v1/{model=models/gemini-1.0-pro}:generateContent","jsonv":"gemini-1.0-pro"}}
+                 ]}},
+                {"APIowner":"Perplexity","TextGen": {"Name":"Perplexity.ai","Models":[
+                {"Name":"Perplexity llama-3-sonar-large-32k-chat","details":{"uri": "https://generativelanguage.googleapis.com/v1/{model=models/gemini-1.5-pro}:generateContent","jsonv":"llama-3-sonar-large-32k-chat"}},
+                {"Name":"Perplexity llama-3-sonar-small-32k-chat","details":{"uri": "https://generativelanguage.googleapis.com/v1/{model=models/gemini-1.5-flash}:generateContent","jsonv":"llama-3-sonar-small-32k-chat"}},
+                {"Name":"Perplexity llama-3-70b-instruct","details":{"uri": "https://generativelanguage.googleapis.com/v1/{model=models/gemini-1.0-pro}:generateContent","jsonv":"llama-3-70b-instruct"}},
+                {"Name":"Perplexity mixtral-8x7b-instruct","details":{"uri": "https://generativelanguage.googleapis.com/v1/{model=models/gemini-1.0-pro}:generateContent","jsonv":"mixtral-8x7b-instruct"}}
                  ]}}]
 google = oauth.register(
     name='google',
