@@ -795,17 +795,46 @@ def chat():
                 db.session.flush(objects=[preprocessedPrompt])
 
                 strTempApiKey = str(decStandard(str(strEncToken)))
-                client = openai.Client(api_key=str(strTempApiKey))
-                stream = client.chat.completions.create(
-                    model=strModel,
-                    messages=[{"role": strRole.lower(), "content": preprocessedPrompt.preProcInputPrompt}],
-                    stream=True,
-                )
                 strRawOutput = ""
-                for chunk in stream:
-                    if chunk.choices[0].delta.content is not None:
-                        strRawOutput += chunk.choices[0].delta.content
-
+                if str(strApi).lower() =="openai":
+                    client = openai.Client(api_key=str(strTempApiKey))
+                    stream = client.chat.completions.create(
+                        model=strModel,
+                        messages=[{"role": strRole.lower(), "content": preprocessedPrompt.preProcInputPrompt}],
+                        stream=True,
+                    )
+                    for chunk in stream:
+                        if chunk.choices[0].delta.content is not None:
+                            strRawOutput += chunk.choices[0].delta.content
+                elif str(strApi).lower() == "anthropic":
+                    client = anthropic.Anthropic(
+                        # defaults to os.environ.get("ANTHROPIC_API_KEY")
+                        api_key=str(strTempApiKey),
+                    )
+                    message = client.messages.create(
+                        model=str(strModel),
+                        max_tokens=1024,
+                        messages=[
+                            {"role": strRole.lower(), "content": preprocessedPrompt.preProcInputPrompt}
+                        ]
+                    )
+                    strRawOutput = str(message.content)
+                elif str(strApi).lower() == "google":
+                    googlegenai.configure(api_key=str(strTempApiKey))
+                    model = googlegenai.GenerativeModel(str(strModel))
+                    response = model.generate_content(preprocessedPrompt.preProcInputPrompt)
+                    strRawOutput = str(response.text)
+                elif str(strApi) == "Perplexity":
+                    client = openai(api_key=str(strTempApiKey), base_url="https://api.perplexity.ai")
+                    response_stream = client.chat.completions.create(
+                        model=strModel,
+                        messages=preprocessedPrompt.preProcInputPrompt,
+                        stream=True,
+                        )
+                    for response in response_stream:
+                        strRawOutput += response
+                else:
+                    flash(strApi + " support will be available soon!")
                 rawOutput = ApiResponse(
                     internalPromptID=internalID,
                     user_id=userid,
